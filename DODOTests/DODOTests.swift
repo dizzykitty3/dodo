@@ -1,10 +1,3 @@
-//
-//  DODOTests.swift
-//  DODOTests
-//
-//  Created by Theo on 11/5/26.
-//
-
 import Testing
 @testable import DODO
 

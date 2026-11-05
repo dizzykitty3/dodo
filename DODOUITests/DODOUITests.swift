@@ -1,10 +1,3 @@
-//
-//  DODOUITests.swift
-//  DODOUITests
-//
-//  Created by Theo on 11/5/26.
-//
-
 import XCTest
 
 final class DODOUITests: XCTestCase {

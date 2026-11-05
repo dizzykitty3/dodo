@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Xcode user-specific data and build artifacts
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
+
+# CocoaPods and Carthage build outputs
+Pods/
+Carthage/Build/
