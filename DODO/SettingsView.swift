@@ -3,6 +3,8 @@ import SwiftUI
 struct SettingsView: View {
     @Binding var previewLimit: Int
     @Binding var urgentPreviewLimit: Int
+    @Binding var sortScheduled: Bool
+    @Binding var sortCompleted: Bool
     @AppStorage("completedCleanupInterval") private var cleanupInterval = CleanupInterval.never
     let completedCount: Int
 
@@ -10,6 +12,11 @@ struct SettingsView: View {
         Form {
             previewSection("Urgent Card", limit: $urgentPreviewLimit)
             previewSection("Today Card", limit: $previewLimit)
+
+            Section("List Sorting") {
+                Toggle("Sort Scheduled by Due Date", isOn: $sortScheduled)
+                Toggle("Sort Completed by Completion Time", isOn: $sortCompleted)
+            }
 
             Section {
                 Picker("Auto-delete", selection: $cleanupInterval) {

@@ -45,6 +45,29 @@ enum CompletedTaskCleanup {
         }
     }
 
+    static func withdrawNext(after record: TaskRecord, context: ModelContext) throws {
+        var nextKey = record.successorKey
+        while let key = nextKey {
+            let query = FetchDescriptor<TaskRecord>(predicate: #Predicate { $0.occurrenceKey == key })
+            guard let next = try context.fetch(query).first else { break }
+            if next.completedAt == nil {
+                if next.deletedAt == nil {
+                    if next.countedCompletion {
+                        if let archive = try context.fetch(FetchDescriptor<CompletionArchive>()).first {
+                            archive.count += 1
+                        } else {
+                            context.insert(CompletionArchive(count: 1))
+                        }
+                    }
+                    context.delete(next)
+                }
+                break
+            }
+            nextKey = next.successorKey
+        }
+        record.successorKey = nil
+    }
+
     static func scheduleNext(after record: TaskRecord, context: ModelContext) {
         guard record.successorKey == nil, let completion = record.completedAt,
               let rule = RepeatRule(rawValue: record.repeatRule), rule != .never else { return }

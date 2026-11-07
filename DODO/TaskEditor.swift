@@ -47,7 +47,7 @@ struct TaskEditor: View {
         _weekday = State(initialValue: (rule == .weekly ? task?.repeatDay : nil) ?? calendar.component(.weekday, from: date))
         _monthDay = State(initialValue: (rule == .monthly ? task?.repeatDay : nil) ?? calendar.component(.day, from: date))
         _urgent = State(initialValue: task?.isUrgent ?? presetUrgent)
-        _subtasks = State(initialValue: task?.subtasks ?? [])
+        _subtasks = State(initialValue: task?.displayedSubtasks ?? [])
     }
 
     var body: some View {
@@ -97,6 +97,7 @@ struct TaskEditor: View {
                             }
                     }
                 }
+                .onMove { subtasks.move(fromOffsets: $0, toOffset: $1) }
                 .onDelete { subtasks.remove(atOffsets: $0) }
                 Button("Add subtask") {
                     insertSubtask(at: subtasks.endIndex)
@@ -168,6 +169,13 @@ struct TaskEditor: View {
             var subtask = $0
             subtask.title = subtask.title.trimmingCharacters(in: .whitespacesAndNewlines)
             return subtask.title.isEmpty ? nil : subtask
+        }
+        do {
+            try record.syncSubtaskCompletion(in: context)
+        } catch {
+            context.rollback()
+            errorMessage = error.localizedDescription
+            return
         }
         commit(afterSave: task == nil ? onCreate : {})
     }

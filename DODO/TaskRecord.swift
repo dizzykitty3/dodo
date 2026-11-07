@@ -31,6 +31,34 @@ final class TaskRecord {
 
     init(title: String) { self.title = title }
 
+    // Older versions allowed completing a parent with unfinished subtasks.
+    var displayedSubtasks: [Subtask] {
+        guard completedAt != nil else { return subtasks }
+        return subtasks.map { child in
+            var child = child
+            child.isComplete = true
+            return child
+        }
+    }
+
+    @MainActor
+    func syncSubtaskCompletion(in context: ModelContext) throws {
+        guard !subtasks.isEmpty else { return }
+        try setCompleted(subtasks.allSatisfy(\.isComplete), in: context)
+    }
+
+    @MainActor
+    func setCompleted(_ done: Bool, in context: ModelContext) throws {
+        guard done != (completedAt != nil) else { return }
+        completedAt = done ? .now : nil
+        if done {
+            countedCompletion = true
+            CompletedTaskCleanup.scheduleNext(after: self, context: context)
+        } else {
+            try CompletedTaskCleanup.withdrawNext(after: self, context: context)
+        }
+    }
+
     static var dayFormat: Date.VerbatimFormatStyle {
         .init(format: "\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits)",
               locale: Locale(identifier: "en_US_POSIX"), timeZone: .current,

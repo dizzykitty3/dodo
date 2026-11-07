@@ -74,3 +74,28 @@ import Testing
     #expect(next.completedAt == nil && next.repeatDay == 2 && next.subtasks.first?.isComplete == false)
     #expect(try context.fetch(FetchDescriptor<CompletionArchive>()).first?.count == 1)
 }
+
+@MainActor
+@Test func subtasksDriveCompletionAndLateRestoreWithdrawsSuccessor() throws {
+    let store = try ModelContainer(for: TaskRecord.self, CompletionArchive.self,
+                                   configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    let context = store.mainContext
+    let task = TaskRecord(title: "Daily checklist")
+    task.repeatRule = RepeatRule.daily.rawValue
+    task.subtasks = [Subtask(title: "First", isComplete: true), Subtask(title: "Second")]
+    context.insert(task)
+    try task.syncSubtaskCompletion(in: context)
+    #expect(task.completedAt == nil)
+    task.subtasks[1].isComplete = true
+    try task.syncSubtaskCompletion(in: context)
+    try context.save()
+    #expect(task.completedAt != nil && task.successorKey != nil)
+    #expect(try context.fetchCount(FetchDescriptor<TaskRecord>()) == 2)
+
+    task.completedAt = Date.now.addingTimeInterval(-86_400)
+    task.subtasks[0].isComplete = false
+    try task.syncSubtaskCompletion(in: context)
+    try context.save()
+    #expect(task.completedAt == nil && task.successorKey == nil && task.countedCompletion)
+    #expect(try context.fetchCount(FetchDescriptor<TaskRecord>()) == 1)
+}

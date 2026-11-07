@@ -75,6 +75,8 @@ struct ContentView: View {
     @State private var storageError: String?
     @State private var panel: Panel?
     @Environment(\.modelContext) private var context
+    @AppStorage("sortScheduledByDate") private var sortScheduled = true
+    @AppStorage("sortCompletedByDate") private var sortCompleted = true
     @State private var pendingRemoval: [PersistentIdentifier: Date] = [:]
     @State private var didCreateTask = false
     @State private var toastMessage = ""
@@ -165,7 +167,9 @@ struct ContentView: View {
                             .navigationTitle("Search")
                             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search tasks")
                     case .settings:
-                        SettingsView(previewLimit: $todayPreviewLimit, urgentPreviewLimit: $urgentPreviewLimit, completedCount: archives.reduce(0) { $0 + $1.count } + tasks.filter(\.countedCompletion).count)
+                        SettingsView(previewLimit: $todayPreviewLimit, urgentPreviewLimit: $urgentPreviewLimit,
+                                     sortScheduled: $sortScheduled, sortCompleted: $sortCompleted,
+                                     completedCount: archives.reduce(0) { $0 + $1.count } + tasks.filter(\.countedCompletion).count)
                     case .compose:
                         TaskEditor(presetToday: composeSource == .today, presetUrgent: composeSource == .urgent,
                                    presetGroup: composeSource?.group, onCreate: { didCreateTask = true })
@@ -250,21 +254,39 @@ struct ContentView: View {
 
     private func taskRows(in list: TaskList) -> some View {
         let records = items(list, includePending: true)
-        return List { rows(records, showsCheckbox: true) }
-            .overlay {
-                if records.isEmpty {
-                    if list.canCreateTask {
-                        ContentUnavailableView("No Tasks", systemImage: list.symbol,
-                                               description: Text("Tap the compose button in the bottom-right corner to create a task."))
-                    } else if list == .completed {
-                        ContentUnavailableView("No Completed Tasks", systemImage: list.symbol,
-                                               description: Text("Tasks you complete appear here."))
-                    } else {
-                        ContentUnavailableView("No Recently Deleted Tasks", systemImage: list.symbol,
-                                               description: Text("Tasks you delete appear here until you restore them."))
-                    }
+        return List {
+            if list == .today {
+                let today = Date.now.formatted(TaskRecord.dayFormat)
+                daySection("Overdue", records.filter { $0.dueDay.map { $0 < today } ?? false })
+                daySection("Today", records.filter { $0.dueDay == today })
+                daySection("No Date", records.filter { $0.dueDay == nil })
+            } else if list == .scheduled && sortScheduled {
+                rows(records.sorted { ($0.dueDay ?? "") < ($1.dueDay ?? "") }, showsCheckbox: true)
+            } else if list == .completed && sortCompleted {
+                rows(records.sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }, showsCheckbox: true)
+            } else {
+                rows(records, showsCheckbox: true)
+            }
+        }
+        .overlay {
+            if records.isEmpty {
+                if list.canCreateTask {
+                    ContentUnavailableView("No Tasks", systemImage: list.symbol,
+                                           description: Text("Tap the compose button in the bottom-right corner to create a task."))
+                } else if list == .completed {
+                    ContentUnavailableView("No Completed Tasks", systemImage: list.symbol,
+                                           description: Text("Tasks you complete appear here."))
+                } else {
+                    ContentUnavailableView("No Recently Deleted Tasks", systemImage: list.symbol,
+                                           description: Text("Tasks you delete appear here until you restore them."))
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func daySection(_ title: String, _ records: [TaskRecord]) -> some View {
+        if !records.isEmpty { Section(title) { rows(records, showsCheckbox: true) } }
     }
 
     private func rows(_ records: [TaskRecord], showsCheckbox: Bool) -> some View {
@@ -272,6 +294,7 @@ struct ContentView: View {
             if record.deletedAt != nil {
                 HStack {
                     Text(record.title)
+                    TaskBadges(record: record)
                     Spacer()
                     Button("Restore") {
                         record.deletedAt = nil
@@ -282,25 +305,24 @@ struct ContentView: View {
                 }
             } else {
                 CompletionRow(record: record, onDelete: { showToast("Task deleted") },
-                              toggle: showsCheckbox ? { try toggleCompletion(record) } : nil)
+                              toggle: showsCheckbox ? { child in try toggleCompletion(record, child: child) } : nil)
             }
         }
     }
 
-    private func toggleCompletion(_ record: TaskRecord) throws {
+    private func toggleCompletion(_ record: TaskRecord, child: UUID?) throws {
         let id = record.persistentModelID
         let previous = record.completedAt
-        let completion = previous == nil ? Date.now : nil
-        if completion != nil { record.countedCompletion = true }
-        record.completedAt = completion
         do {
-            if completion != nil {
-                CompletedTaskCleanup.scheduleNext(after: record, context: context)
-            } else if pendingRemoval[id] != nil, let key = record.successorKey,
-                      let next = try context.fetch(FetchDescriptor<TaskRecord>(predicate: #Predicate { $0.occurrenceKey == key })).first,
-                      next.completedAt == nil, next.deletedAt == nil, !next.countedCompletion {
-                context.delete(next)
-                record.successorKey = nil
+            if let child {
+                var edited = record.displayedSubtasks
+                guard let index = edited.firstIndex(where: { $0.id == child }) else { return }
+                edited[index].isComplete.toggle()
+                record.subtasks = edited
+                try record.syncSubtaskCompletion(in: context)
+            } else {
+                guard record.subtasks.isEmpty else { return }
+                try record.setCompleted(previous == nil, in: context)
             }
             try context.save()
         } catch {
@@ -308,6 +330,8 @@ struct ContentView: View {
             throw error
         }
         UISelectionFeedbackGenerator().selectionChanged()
+        let completion = record.completedAt
+        guard previous != completion else { return }
         pendingRemoval[id] = completion
         guard let completion else { return }
         Task { @MainActor in
@@ -373,10 +397,9 @@ struct ContentView: View {
 }
 
 private struct CompletionRow: View {
-    @Environment(\.modelContext) private var context
     let record: TaskRecord
     let onDelete: () -> Void
-    let toggle: (() throws -> Void)?
+    let toggle: ((UUID?) throws -> Void)?
     @State private var errorMessage: String?
 
     var body: some View {
@@ -385,13 +408,14 @@ private struct CompletionRow: View {
             HStack(spacing: 6) {
                 if let toggle {
                     Button {
-                        do { try toggle() } catch { errorMessage = error.localizedDescription }
+                        do { try toggle(nil) } catch { errorMessage = error.localizedDescription }
                     } label: {
-                        Image(systemName: completed ? "checkmark.circle.fill" : "circle")
+                        Image(systemName: completed ? "checkmark.circle.fill" : record.subtasks.contains(where: \.isComplete) ? "circle.lefthalf.filled" : "circle")
                             .font(.title3)
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.borderless)
+                    .disabled(!record.subtasks.isEmpty)
                     .accessibilityLabel(completed ? "Restore " + record.title : "Complete " + record.title)
                 }
                 NavigationLink {
@@ -399,31 +423,15 @@ private struct CompletionRow: View {
                 } label: {
                     HStack {
                         Text(record.title).fontWeight(record.subtasks.isEmpty ? .regular : .semibold).strikethrough(completed)
-                        if record.isUrgent {
-                            Image(systemName: "star.fill")
-                                .foregroundStyle(completed ? Color.secondary : .orange)
-                                .accessibilityLabel("Urgent")
-                        }
-                        if record.repeatRule != RepeatRule.never.rawValue {
-                            Image(systemName: "repeat").foregroundStyle(.secondary).accessibilityLabel("Repeating")
-                        }
+                        TaskBadges(record: record)
                     }
                     .foregroundStyle(completed ? .secondary : .primary)
                 }
             }
-            if toggle != nil {
-                ForEach(record.subtasks) { child in
+            if let toggle {
+                ForEach(record.displayedSubtasks) { child in
                     Button {
-                        guard let index = record.subtasks.firstIndex(where: { $0.id == child.id }) else { return }
-                        let previous = record.subtasks
-                        record.subtasks[index].isComplete.toggle()
-                        do {
-                            try context.save()
-                            UISelectionFeedbackGenerator().selectionChanged()
-                        } catch {
-                            record.subtasks = previous
-                            errorMessage = error.localizedDescription
-                        }
+                        do { try toggle(child.id) } catch { errorMessage = error.localizedDescription }
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: child.isComplete ? "checkmark.circle.fill" : "circle")
@@ -441,6 +449,31 @@ private struct CompletionRow: View {
         .alert("Couldn’t update task", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
         } message: { Text(errorMessage ?? "") }
+    }
+}
+
+private struct TaskBadges: View {
+    let record: TaskRecord
+    var body: some View {
+        HStack(spacing: 5) {
+            if record.isUrgent {
+                Image(systemName: "star.fill")
+                    .foregroundStyle(record.completedAt == nil ? Color.orange : .secondary)
+                    .accessibilityLabel("Urgent")
+            }
+            if record.repeatRule != RepeatRule.never.rawValue {
+                Image(systemName: "repeat").accessibilityLabel("Repeating")
+            }
+            if let day = record.dueDay {
+                Text(day)
+                    .font(.caption)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(.quaternary, in: Capsule())
+                    .accessibilityLabel("Due " + day)
+            }
+        }
+        .foregroundStyle(.secondary)
     }
 }
 
