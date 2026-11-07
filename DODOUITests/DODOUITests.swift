@@ -16,6 +16,37 @@ final class DODOUITests: XCTestCase {
     }
 
     @MainActor
+    func testSingleCustomListScopesCreationAndSearch() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-test-in-memory"]
+        app.launch()
+
+        func addTask(_ title: String) {
+            app.buttons["New Task"].tap()
+            let field = app.descendants(matching: .any).matching(identifier: "Title").firstMatch
+            XCTAssertTrue(field.waitForExistence(timeout: 5))
+            field.tap()
+            field.typeText(title)
+            app.buttons["Save"].tap()
+        }
+
+        addTask("Outside task")
+        app.buttons["New List"].tap()
+        let alert = app.alerts["New List"]
+        alert.textFields.firstMatch.tap()
+        alert.textFields.firstMatch.typeText("Projects")
+        alert.buttons["Create"].tap()
+        app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "Projects")).firstMatch.tap()
+        addTask("Inside task")
+        XCTAssertTrue(app.staticTexts["Inside task"].waitForExistence(timeout: 5))
+        app.buttons["Search"].tap()
+        XCTAssertTrue(app.navigationBars["Search"].waitForExistence(timeout: 5))
+        for title in ["Projects", "Other Tasks", "Inside task", "Outside task"] {
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label ==[c] %@", title)).firstMatch.exists, title)
+        }
+    }
+
+    @MainActor
     func testExample() throws {
         // UI tests must launch the application that they test.
         let app = XCUIApplication()

@@ -50,7 +50,12 @@ private enum TaskList: Hashable, Identifiable {
 }
 
 private enum Panel: Identifiable, Hashable {
-    case search, settings, compose
+    case search(TaskList), settings, compose(TaskList?)
+
+    var isSearch: Bool {
+        if case .search = self { return true }
+        return false
+    }
     var id: Self { self }
 }
 
@@ -66,10 +71,8 @@ struct ContentView: View {
 
     @AppStorage("todayPreviewLimit") private var todayPreviewLimit = 5
     @Query(sort: \TaskRecord.createdAt, order: .reverse) private var tasks: [TaskRecord]
-    @State private var composeSource: TaskList?
     @AppStorage("urgentPreviewLimit") private var urgentPreviewLimit = 5
     @Query(sort: TaskGroup.displayOrder) private var groups: [TaskGroup]
-    @State private var searchSource: TaskList = .all
     @State private var namingList = false
     @State private var listName = ""
     @State private var storageError: String?
@@ -162,28 +165,28 @@ struct ContentView: View {
             NavigationStack {
                 Group {
                     switch selected {
-                    case .search:
-                        searchResults
+                    case .search(let source):
+                        searchResults(from: source)
                             .navigationTitle("Search")
                             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search tasks")
                     case .settings:
                         SettingsView(previewLimit: $todayPreviewLimit, urgentPreviewLimit: $urgentPreviewLimit,
                                      sortScheduled: $sortScheduled, sortCompleted: $sortCompleted,
                                      completedCount: archives.reduce(0) { $0 + $1.count } + tasks.filter(\.countedCompletion).count)
-                    case .compose:
+                    case .compose(let composeSource):
                         TaskEditor(presetToday: composeSource == .today, presetUrgent: composeSource == .urgent,
                                    presetGroup: composeSource?.group, onCreate: { didCreateTask = true })
                     }
                 }
                 .toolbar {
-                    if selected != .compose {
+                    if selected.isSearch || selected == .settings {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Close", systemImage: "xmark") { panel = nil }
                         }
                     }
                 }
             }
-            .overlay { if selected == .search { toastPill } }
+            .overlay { if selected.isSearch { toastPill } }
             .presentationDetents([.large])
         }
     }
@@ -200,8 +203,7 @@ struct ContentView: View {
         ToolbarSpacer(.flexible, placement: .bottomBar)
         ToolbarItem(placement: .bottomBar) {
             Button("New Task", systemImage: "square.and.pencil") {
-                composeSource = source
-                panel = .compose
+                panel = .compose(source)
             }
             .labelStyle(.iconOnly)
         }
@@ -228,13 +230,12 @@ struct ContentView: View {
     private func searchButton(from source: TaskList) -> some View {
         Button("Search", systemImage: "magnifyingglass") {
             query = ""
-            searchSource = source
-            panel = .search
+            panel = .search(source)
         }
         .labelStyle(.iconOnly)
     }
 
-    private var searchResults: some View {
+    private func searchResults(from searchSource: TaskList) -> some View {
         let matches = tasks.filter {
             ($0.deletedAt == nil || searchSource == .deleted) && (query.isEmpty || $0.title.localizedStandardContains(query))
         }
