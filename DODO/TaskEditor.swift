@@ -5,6 +5,11 @@ struct TaskEditor: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     let task: TaskRecord?
+    let presetToday: Bool
+    let presetUrgent: Bool
+    @State private var initialDate: Date
+    let onDelete: () -> Void
+    let onCreate: () -> Void
 
     @State private var title: String
     @State private var hasDate: Bool
@@ -13,24 +18,30 @@ struct TaskEditor: View {
     @State private var weekday: Int
     @State private var monthDay: Int
     @State private var urgent: Bool
-    @State private var personal: Bool
     @State private var subtasks: [Subtask]
+    private enum Field: Hashable { case title, subtask(UUID) }
+    @FocusState private var focusedField: Field?
+    @State private var confirmingDiscard = false
     @State private var confirmingDelete = false
     @State private var errorMessage: String?
 
-    init(task: TaskRecord? = nil) {
+    init(task: TaskRecord? = nil, presetToday: Bool = false, presetUrgent: Bool = false, onDelete: @escaping () -> Void = {}, onCreate: @escaping () -> Void = {}) {
+        self.presetToday = presetToday
+        self.presetUrgent = presetUrgent
+        self.onDelete = onDelete
+        self.onCreate = onCreate
         self.task = task
         let date = task?.dueDay.flatMap { try? TaskRecord.dayFormat.parseStrategy.parse($0) } ?? .now
         let rule = RepeatRule(rawValue: task?.repeatRule ?? "") ?? .never
         let calendar = Calendar(identifier: .gregorian)
         _title = State(initialValue: task?.title ?? "")
+        _initialDate = State(initialValue: date)
         _date = State(initialValue: date)
-        _hasDate = State(initialValue: task?.dueDay != nil)
+        _hasDate = State(initialValue: task?.dueDay != nil || presetToday)
         _rule = State(initialValue: rule)
         _weekday = State(initialValue: (rule == .weekly ? task?.repeatDay : nil) ?? calendar.component(.weekday, from: date))
         _monthDay = State(initialValue: (rule == .monthly ? task?.repeatDay : nil) ?? calendar.component(.day, from: date))
-        _urgent = State(initialValue: task?.isUrgent ?? false)
-        _personal = State(initialValue: task?.isPersonal ?? false)
+        _urgent = State(initialValue: task?.isUrgent ?? presetUrgent)
         _subtasks = State(initialValue: task?.subtasks ?? [])
     }
 
@@ -38,8 +49,8 @@ struct TaskEditor: View {
         Form {
             Section("Task") {
                 TextField("Title", text: $title)
+                    .focused($focusedField, equals: .title)
                 Toggle("Urgent", isOn: $urgent)
-                Toggle("Personal list", isOn: $personal)
             }
             Section("Schedule") {
                 Toggle("Set date", isOn: $hasDate)
@@ -63,22 +74,46 @@ struct TaskEditor: View {
                         } label: {
                             Image(systemName: subtask.isComplete ? "checkmark.circle.fill" : "circle")
                         }
-                        .buttonStyle(.glass)
+                        .buttonStyle(.borderless)
                         .accessibilityLabel(subtask.isComplete ? "Mark incomplete" : "Mark complete")
                         TextField("Subtask title", text: $subtask.title)
+                            .focused($focusedField, equals: .subtask(subtask.id))
+                            .submitLabel(.next)
+                            .onSubmit {
+                                guard !subtask.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                                      let index = subtasks.firstIndex(where: { $0.id == subtask.id }) else { return }
+                                insertSubtask(at: index + 1)
+                            }
                     }
                 }
                 .onDelete { subtasks.remove(atOffsets: $0) }
-                Button("Add subtask", systemImage: "plus") { subtasks.append(Subtask()) }
-                    .buttonStyle(.glass)
+                Button("Add subtask") {
+                    insertSubtask(at: subtasks.endIndex)
+                }
+                .tint(.blue)
             }
             if task != nil {
                 Button("Delete task", role: .destructive) { confirmingDelete = true }
-                    .buttonStyle(.glass)
+                    .foregroundStyle(.red)
             }
         }
+        .onAppear {
+            if task == nil { focusedField = .title }
+        }
         .navigationTitle(task == nil ? "New Task" : "Edit Task")
+        .interactiveDismissDisabled(hasNewTaskChanges)
         .toolbar {
+            if task == nil {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", systemImage: "xmark") {
+                        if hasNewTaskChanges { confirmingDiscard = true } else { dismiss() }
+                    }
+                    .confirmationDialog("Discard this task?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
+                        Button("Discard changes", role: .destructive) { dismiss() }
+                        Button("Keep editing", role: .cancel) {}
+                    }
+                }
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") { save() }
                     .disabled(cleanTitle.isEmpty)
@@ -88,12 +123,22 @@ struct TaskEditor: View {
             Button("Delete task", role: .destructive) {
                 guard let task else { return }
                 context.delete(task)
-                commit()
+                commit(afterSave: onDelete)
             }
         }
         .alert("Couldn’t save changes", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
         } message: { Text(errorMessage ?? "") }
+    }
+
+    private var hasNewTaskChanges: Bool {
+        task == nil && (!title.isEmpty || urgent != presetUrgent || hasDate != presetToday || (hasDate && !Calendar.current.isDate(date, inSameDayAs: initialDate)) || rule != .never || !subtasks.isEmpty)
+    }
+
+    private func insertSubtask(at index: Int) {
+        let next = Subtask()
+        subtasks.insert(next, at: index)
+        focusedField = .subtask(next.id)
     }
 
     private var cleanTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -107,18 +152,19 @@ struct TaskEditor: View {
         record.repeatRule = rule.rawValue
         record.repeatDay = rule == .weekly ? weekday : rule == .monthly ? monthDay : nil
         record.isUrgent = urgent
-        record.isPersonal = personal
         record.subtasks = subtasks.compactMap {
             var subtask = $0
             subtask.title = subtask.title.trimmingCharacters(in: .whitespacesAndNewlines)
             return subtask.title.isEmpty ? nil : subtask
         }
-        commit()
+        commit(afterSave: task == nil ? onCreate : {})
     }
 
-    private func commit() {
+    private func commit(afterSave: () -> Void) {
         do {
             try context.save()
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            afterSave()
             dismiss()
         } catch {
             context.rollback()
