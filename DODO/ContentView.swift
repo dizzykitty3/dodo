@@ -34,6 +34,8 @@ private enum TaskList: Hashable, Identifiable {
         case .scheduled: Color(red: 0.74, green: 0.44, blue: 0.44)
         }
     }
+    var canCreateTask: Bool { self != .completed && self != .deleted }
+
     var symbol: String {
         switch self {
         case .deleted: "trash"
@@ -104,12 +106,12 @@ struct ContentView: View {
                 composeToolbar(from: nil)
             }
             .navigationDestination(for: TaskList.self) { list in
-                taskRows(items(list, includePending: true))
+                taskRows(in: list)
                     .navigationTitle(list.title)
                     .toolbar(.visible, for: .navigationBar)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) { searchButton(from: list) }
-                        if list != .completed && list != .deleted { composeToolbar(from: list) }
+                        if list.canCreateTask { composeToolbar(from: list) }
                     }
             }
         }
@@ -225,8 +227,23 @@ struct ContentView: View {
         .overlay { if matches.isEmpty { ContentUnavailableView.search(text: query) } }
     }
 
-    private func taskRows(_ records: [TaskRecord]) -> some View {
-        List { rows(records, showsCheckbox: true) }
+    private func taskRows(in list: TaskList) -> some View {
+        let records = items(list, includePending: true)
+        return List { rows(records, showsCheckbox: true) }
+            .overlay {
+                if records.isEmpty {
+                    if list.canCreateTask {
+                        ContentUnavailableView("No Tasks", systemImage: list.symbol,
+                                               description: Text("Tap the compose button in the bottom-right corner to create a task."))
+                    } else if list == .completed {
+                        ContentUnavailableView("No Completed Tasks", systemImage: list.symbol,
+                                               description: Text("Tasks you complete appear here."))
+                    } else {
+                        ContentUnavailableView("No Recently Deleted Tasks", systemImage: list.symbol,
+                                               description: Text("Tasks you delete appear here until you restore them."))
+                    }
+                }
+            }
     }
 
     private func rows(_ records: [TaskRecord], showsCheckbox: Bool) -> some View {
