@@ -14,9 +14,13 @@ struct SettingsView: View {
             previewSection("Urgent Card", limit: $urgentPreviewLimit)
             previewSection("Today Card", limit: $previewLimit)
 
-            Section("List Sorting") {
+            Section {
                 Toggle("Sort Scheduled by Due Date", isOn: $sortScheduled)
                 Toggle("Sort Completed by Completion Time", isOn: $sortCompleted)
+            } header: {
+                Text("List Sorting")
+            } footer: {
+                Text("Other lists show newly created tasks first by default.")
             }
 
             Section("Custom Lists") {
