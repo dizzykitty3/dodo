@@ -68,7 +68,7 @@ struct ContentView: View {
     @Query(sort: \TaskRecord.createdAt, order: .reverse) private var tasks: [TaskRecord]
     @State private var composeSource: TaskList?
     @AppStorage("urgentPreviewLimit") private var urgentPreviewLimit = 5
-    @Query(sort: \TaskGroup.createdAt) private var groups: [TaskGroup]
+    @Query(sort: TaskGroup.displayOrder) private var groups: [TaskGroup]
     @State private var searchSource: TaskList = .all
     @State private var namingList = false
     @State private var listName = ""
@@ -132,7 +132,7 @@ struct ContentView: View {
             Button("Create") {
                 let name = listName.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !name.isEmpty else { return }
-                context.insert(TaskGroup(name: name))
+                context.insert(TaskGroup(name: name, position: (groups.last?.position ?? -1) + 1))
                 do { try context.save() } catch { context.rollback(); storageError = error.localizedDescription }
             }
             .disabled(listName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

@@ -5,7 +5,7 @@ struct TaskEditor: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     let task: TaskRecord?
-    @Query(sort: \TaskGroup.createdAt) private var groups: [TaskGroup]
+    @Query(sort: TaskGroup.displayOrder) private var groups: [TaskGroup]
     let presetGroup: TaskGroup?
     @State private var group: TaskGroup?
     let presetToday: Bool
@@ -53,7 +53,8 @@ struct TaskEditor: View {
     var body: some View {
         Form {
             Section("Task") {
-                TextField("Title", text: $title)
+                TextField("Title", text: $title, axis: .vertical)
+                    .fixedSize(horizontal: false, vertical: true)
                     .focused($focusedField, equals: .title)
                 if !groups.isEmpty {
                     Picker("List", selection: $group) {

@@ -19,6 +19,10 @@ struct SettingsView: View {
                 Toggle("Sort Completed by Completion Time", isOn: $sortCompleted)
             }
 
+            Section("Custom Lists") {
+                NavigationLink("Manage Lists") { CustomListsView() }
+            }
+
             Section("Date Badges") {
                 Picker("Date Order", selection: dateBadge.$order) {
                     ForEach(DateBadgeOrder.allCases, id: \.self) { Text($0.rawValue).tag($0) }

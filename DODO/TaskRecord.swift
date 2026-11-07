@@ -70,5 +70,13 @@ final class TaskRecord {
 final class TaskGroup {
     var name: String
     var createdAt = Date.now
-    init(name: String) { self.name = name }
+    var position = 0
+    static var displayOrder: [SortDescriptor<TaskGroup>] {
+        [SortDescriptor(\TaskGroup.position), SortDescriptor(\TaskGroup.createdAt)]
+    }
+
+    init(name: String, position: Int = 0) {
+        self.name = name
+        self.position = position
+    }
 }
