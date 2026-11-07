@@ -28,18 +28,21 @@ struct SettingsView: View {
             }
 
             Section("Date Badges") {
-                Picker("Date Order", selection: dateBadge.$order) {
-                    ForEach(DateBadgeOrder.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                Toggle("Use Abbreviated Month Names", isOn: dateBadge.$abbreviatesMonth)
+                if !dateBadge.abbreviatesMonth {
+                    Picker("Date Order", selection: dateBadge.$order) {
+                        ForEach(DateBadgeOrder.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
+                    Picker("Separator", selection: dateBadge.$separator) {
+                        ForEach(DateBadgeSeparator.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
                 }
-                Picker("Separator", selection: dateBadge.$separator) {
-                    ForEach(DateBadgeSeparator.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                Toggle("Show Year for This Year", isOn: dateBadge.$showsCurrentYear)
+                Toggle("Show Current Year", isOn: dateBadge.$showsCurrentYear)
                 let year = Calendar(identifier: .gregorian).component(.year, from: .now)
                 LabeledContent("Preview") {
                     HStack {
-                        TaskDateBadge(day: "\(year)-03-24")
-                        TaskDateBadge(day: "\(year + 1)-03-24")
+                        TaskDateBadge(day: "\(year)-11-04")
+                        TaskDateBadge(day: "\(year + 1)-11-04")
                     }
                 }
             }

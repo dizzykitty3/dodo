@@ -33,6 +33,7 @@ struct DateBadgePreferences: DynamicProperty {
         defaults.set(true, forKey: "dateBadgeInitialized")
     }
 
+    @AppStorage("dateBadgeAbbreviatesMonth") var abbreviatesMonth = false
     @AppStorage("dateBadgeOrder") var order = DateBadgeOrder.yearFirst
     @AppStorage("dateBadgeSeparator") var separator = DateBadgeSeparator.dash
     @AppStorage("dateBadgeShowsCurrentYear") var showsCurrentYear = true
@@ -43,6 +44,13 @@ struct DateBadgePreferences: DynamicProperty {
         let year = parts[0], month = parts[1], date = parts[2]
         let currentYear = Calendar(identifier: .gregorian).component(.year, from: .now)
         let includeYear = showsCurrentYear || Int(year) != currentYear
+        if abbreviatesMonth, let value = try? TaskRecord.dayFormat.parseStrategy.parse(day) {
+            let format: Date.FormatString = includeYear
+                ? "\(month: .abbreviated) \(day: .defaultDigits), \(year: .defaultDigits)"
+                : "\(month: .abbreviated) \(day: .defaultDigits)"
+            return value.formatted(.verbatim(format, locale: Locale(identifier: "en_US_POSIX"),
+                                             timeZone: .current, calendar: Calendar(identifier: .gregorian)))
+        }
         let defaults = UserDefaults.standard
         if order.rawValue == defaults.string(forKey: "dateBadgeInitialOrder"),
            separator.rawValue == defaults.string(forKey: "dateBadgeInitialSeparator"),
