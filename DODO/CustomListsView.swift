@@ -45,6 +45,7 @@ struct CustomListsView: View {
             }
         }
         .navigationTitle("Manage Lists")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar { if !groups.isEmpty { EditButton() } }
         .sheet(item: $editingGroup) { group in
             NavigationStack { CustomListEditor(group: group) }

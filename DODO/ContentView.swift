@@ -160,6 +160,7 @@ struct ContentView: View {
                     case .search(let source):
                         searchResults(from: source)
                             .navigationTitle("Search")
+                            .navigationBarTitleDisplayMode(.inline)
                             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search tasks")
                     case .newList:
                         CustomListEditor()
