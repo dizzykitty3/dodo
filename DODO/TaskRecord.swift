@@ -70,6 +70,8 @@ final class TaskRecord {
 final class TaskGroup {
     var name: String
     var createdAt = Date.now
+    var colorName = "Indigo"
+    var symbolName = "list.bullet"
     var position = 0
     static var displayOrder: [SortDescriptor<TaskGroup>] {
         [SortDescriptor(\TaskGroup.position), SortDescriptor(\TaskGroup.createdAt)]

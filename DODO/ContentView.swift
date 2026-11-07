@@ -1,8 +1,10 @@
 import SwiftUI
 import SwiftData
 
-private enum TaskList: Hashable, Identifiable {
+enum TaskList: Hashable, Identifiable {
     case today, urgent, completed, scheduled, all, deleted, custom(TaskGroup)
+
+    static let builtIns: [TaskList] = [.urgent, .today, .scheduled, .all, .completed, .deleted]
 
     var title: String {
         switch self {
@@ -26,7 +28,7 @@ private enum TaskList: Hashable, Identifiable {
     var color: Color {
         switch self {
         case .deleted: Color.gray
-        case .custom: Color.indigo
+        case .custom(let group): group.cardColor.color
         case .all: Color(red: 0.37, green: 0.39, blue: 0.44)
         case .today: Color(red: 0.35, green: 0.56, blue: 0.72)
         case .urgent: Color(red: 0.73, green: 0.39, blue: 0.54)
@@ -39,7 +41,7 @@ private enum TaskList: Hashable, Identifiable {
     var symbol: String {
         switch self {
         case .deleted: "trash"
-        case .custom: "list.bullet"
+        case .custom(let group): group.cardIcon.rawValue
         case .all: "tray.full.fill"
         case .today: "sun.max.fill"
         case .urgent: "star.fill"
@@ -50,7 +52,7 @@ private enum TaskList: Hashable, Identifiable {
 }
 
 private enum Panel: Identifiable, Hashable {
-    case search(TaskList), settings, compose(TaskList?)
+    case search(TaskList), settings, compose(TaskList?), newList
 
     var isSearch: Bool {
         if case .search = self { return true }
@@ -73,8 +75,6 @@ struct ContentView: View {
     @Query(sort: \TaskRecord.createdAt, order: .reverse) private var tasks: [TaskRecord]
     @AppStorage("urgentPreviewLimit") private var urgentPreviewLimit = 5
     @Query(sort: TaskGroup.displayOrder) private var groups: [TaskGroup]
-    @State private var namingList = false
-    @State private var listName = ""
     @State private var storageError: String?
     @State private var panel: Panel?
     @Environment(\.modelContext) private var context
@@ -118,7 +118,7 @@ struct ContentView: View {
                         .labelStyle(.iconOnly)
                 }
                 ToolbarItem(placement: .bottomBar) {
-                    Button("New List", systemImage: "list.bullet.badge.plus") { listName = ""; namingList = true }
+                    Button("New List", systemImage: "list.bullet.badge.plus") { panel = .newList }
                 }
                 composeToolbar(from: nil)
             }
@@ -131,17 +131,6 @@ struct ContentView: View {
                         if list.canCreateTask { composeToolbar(from: list) }
                     }
             }
-        }
-        .alert("New List", isPresented: $namingList) {
-            TextField("List name", text: $listName)
-            Button("Cancel", role: .cancel) {}
-            Button("Create") {
-                let name = listName.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !name.isEmpty else { return }
-                context.insert(TaskGroup(name: name, position: (groups.last?.position ?? -1) + 1))
-                do { try context.save() } catch { context.rollback(); storageError = error.localizedDescription }
-            }
-            .disabled(listName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .alert("Couldn’t save changes", isPresented: Binding(get: { storageError != nil }, set: { if !$0 { storageError = nil } })) {
             Button("OK") { storageError = nil }
@@ -172,6 +161,8 @@ struct ContentView: View {
                         searchResults(from: source)
                             .navigationTitle("Search")
                             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search tasks")
+                    case .newList:
+                        CustomListEditor()
                     case .settings:
                         SettingsView(previewLimit: $todayPreviewLimit, urgentPreviewLimit: $urgentPreviewLimit,
                                      sortScheduled: $sortScheduled, sortCompleted: $sortCompleted,

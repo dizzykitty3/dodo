@@ -5,8 +5,7 @@ struct CustomListsView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: TaskGroup.displayOrder) private var groups: [TaskGroup]
     @State private var selection: TaskGroup?
-    @State private var name = ""
-    @State private var renaming = false
+    @State private var editingGroup: TaskGroup?
     @State private var deleting = false
     @State private var error: String?
 
@@ -14,11 +13,10 @@ struct CustomListsView: View {
         List {
             ForEach(groups) { group in
                 Button {
-                    selection = group
-                    name = group.name
-                    renaming = true
+                    editingGroup = group
                 } label: {
                     HStack {
+                        Image(systemName: group.cardIcon.rawValue).foregroundStyle(group.cardColor.color)
                         Text(group.name)
                         Spacer()
                         Image(systemName: "pencil").foregroundStyle(.secondary)
@@ -48,13 +46,8 @@ struct CustomListsView: View {
         }
         .navigationTitle("Manage Lists")
         .toolbar { if !groups.isEmpty { EditButton() } }
-        .alert("Rename List", isPresented: $renaming) {
-            TextField("List name", text: $name)
-            Button("Cancel", role: .cancel) {}
-            Button("Save") {
-                save { selection?.name = name.trimmingCharacters(in: .whitespacesAndNewlines) }
-            }
-            .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        .sheet(item: $editingGroup) { group in
+            NavigationStack { CustomListEditor(group: group) }
         }
         .alert("Delete List?", isPresented: $deleting) {
             Button("Cancel", role: .cancel) {}

@@ -32,10 +32,15 @@ final class DODOUITests: XCTestCase {
 
         addTask("Outside task")
         app.buttons["New List"].tap()
-        let alert = app.alerts["New List"]
-        alert.textFields.firstMatch.tap()
-        alert.textFields.firstMatch.typeText("Projects")
-        alert.buttons["Create"].tap()
+        let name = app.textFields["List name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        app.typeText("Today")
+        XCTAssertFalse(app.buttons["Create"].isEnabled)
+        name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 5) + "Projects\n")
+        app.buttons["Teal"].tap()
+        app.buttons["Work"].tap()
+        XCTAssertTrue(app.buttons["Work"].isSelected)
+        app.buttons["Create"].tap()
         app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "Projects")).firstMatch.tap()
         addTask("Inside task")
         XCTAssertTrue(app.staticTexts["Inside task"].waitForExistence(timeout: 5))
