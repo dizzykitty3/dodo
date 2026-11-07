@@ -55,6 +55,15 @@ private enum Panel: Identifiable, Hashable {
 }
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("completedCleanupInterval") private var cleanupInterval = CleanupInterval.never
+    @Query private var archives: [CompletionArchive]
+
+    private var cleanupDeadline: Date? {
+        guard scenePhase == .active, cleanupInterval != .never else { return nil }
+        return tasks.compactMap { $0.completedAt }.min().flatMap { cleanupInterval.deadline(for: $0) }
+    }
+
     @AppStorage("todayPreviewLimit") private var todayPreviewLimit = 5
     @Query(sort: \TaskRecord.createdAt, order: .reverse) private var tasks: [TaskRecord]
     @State private var composeSource: TaskList?
@@ -129,6 +138,18 @@ struct ContentView: View {
         .alert("Couldn’t save changes", isPresented: Binding(get: { storageError != nil }, set: { if !$0 { storageError = nil } })) {
             Button("OK") { storageError = nil }
         } message: { Text(storageError ?? "") }
+        .task(id: cleanupDeadline) {
+            guard let deadline = cleanupDeadline else { return }
+            do {
+                if deadline > .now { try await Task.sleep(for: .seconds(deadline.timeIntervalSinceNow)) }
+                try Task.checkCancellation()
+                try CompletedTaskCleanup.purge(tasks, interval: cleanupInterval, now: .now, context: context)
+            } catch is CancellationError {
+                return
+            } catch {
+                storageError = error.localizedDescription
+            }
+        }
         .overlay { toastPill }
         .task(id: toastID) {
             guard toastID != nil else { return }
@@ -144,7 +165,7 @@ struct ContentView: View {
                             .navigationTitle("Search")
                             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search tasks")
                     case .settings:
-                        SettingsView(previewLimit: $todayPreviewLimit, urgentPreviewLimit: $urgentPreviewLimit, completedCount: tasks.filter(\.countedCompletion).count)
+                        SettingsView(previewLimit: $todayPreviewLimit, urgentPreviewLimit: $urgentPreviewLimit, completedCount: archives.reduce(0) { $0 + $1.count } + tasks.filter(\.countedCompletion).count)
                     case .compose:
                         TaskEditor(presetToday: composeSource == .today, presetUrgent: composeSource == .urgent,
                                    presetGroup: composeSource?.group, onCreate: { didCreateTask = true })
@@ -270,14 +291,20 @@ struct ContentView: View {
         let id = record.persistentModelID
         let previous = record.completedAt
         let completion = previous == nil ? Date.now : nil
-        let wasCounted = record.countedCompletion
         if completion != nil { record.countedCompletion = true }
         record.completedAt = completion
         do {
+            if completion != nil {
+                CompletedTaskCleanup.scheduleNext(after: record, context: context)
+            } else if pendingRemoval[id] != nil, let key = record.successorKey,
+                      let next = try context.fetch(FetchDescriptor<TaskRecord>(predicate: #Predicate { $0.occurrenceKey == key })).first,
+                      next.completedAt == nil, next.deletedAt == nil, !next.countedCompletion {
+                context.delete(next)
+                record.successorKey = nil
+            }
             try context.save()
         } catch {
-            record.countedCompletion = wasCounted
-            record.completedAt = previous
+            context.rollback()
             throw error
         }
         UISelectionFeedbackGenerator().selectionChanged()
@@ -417,4 +444,4 @@ private struct CompletionRow: View {
     }
 }
 
-#Preview { ContentView().modelContainer(for: TaskRecord.self, inMemory: true) }
+#Preview { ContentView().modelContainer(for: [TaskRecord.self, CompletionArchive.self], inMemory: true) }

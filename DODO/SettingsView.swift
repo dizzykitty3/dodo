@@ -3,12 +3,25 @@ import SwiftUI
 struct SettingsView: View {
     @Binding var previewLimit: Int
     @Binding var urgentPreviewLimit: Int
+    @AppStorage("completedCleanupInterval") private var cleanupInterval = CleanupInterval.never
     let completedCount: Int
 
     var body: some View {
         Form {
             previewSection("Urgent Card", limit: $urgentPreviewLimit)
             previewSection("Today Card", limit: $previewLimit)
+
+            Section {
+                Picker("Auto-delete", selection: $cleanupInterval) {
+                    Text("Never").tag(CleanupInterval.never)
+                    Text("After 1 day").tag(CleanupInterval.oneDay)
+                    Text("After 7 days").tag(CleanupInterval.sevenDays)
+                }
+            } header: {
+                Text("Completed Tasks")
+            } footer: {
+                Text("Completed tasks are permanently deleted after the selected time. Future repeat occurrences are kept.")
+            }
 
             Section("Stats & About") {
                 LabeledContent("Tasks Completed", value: completedCount.formatted())

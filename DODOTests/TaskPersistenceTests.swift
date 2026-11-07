@@ -43,3 +43,34 @@ import Testing
     let store = try openStore()
     #expect(try store.mainContext.fetchCount(FetchDescriptor<TaskRecord>()) == 0)
 }
+
+@MainActor
+@Test func cleanupUsesCompletionTimeAndKeepsTheNextOccurrence() throws {
+    let container = try ModelContainer(for: TaskRecord.self, CompletionArchive.self,
+                                       configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    let context = container.mainContext
+    let now = Date.now
+    let task = TaskRecord(title: "Weekly review")
+    task.completedAt = now.addingTimeInterval(-86_400)
+    task.repeatRule = RepeatRule.weekly.rawValue
+    task.repeatDay = 2
+    task.countedCompletion = true
+    task.subtasks = [Subtask(title: "Review notes", isComplete: true)]
+    let recent = TaskRecord(title: "Recent")
+    recent.completedAt = now.addingTimeInterval(-86_399)
+    recent.dueDay = "2020-01-01"
+    context.insert(task)
+    context.insert(recent)
+    try context.save()
+    for interval in [CleanupInterval.never, .sevenDays] {
+        try CompletedTaskCleanup.purge([task, recent], interval: interval, now: now, context: context)
+        #expect(try context.fetchCount(FetchDescriptor<TaskRecord>()) == 2)
+    }
+    CompletedTaskCleanup.scheduleNext(after: task, context: context)
+    try CompletedTaskCleanup.purge([task, recent], interval: .oneDay, now: now, context: context)
+    let remaining = try context.fetch(FetchDescriptor<TaskRecord>())
+    #expect(remaining.count == 2)
+    let next = try #require(remaining.first { $0.title == "Weekly review" })
+    #expect(next.completedAt == nil && next.repeatDay == 2 && next.subtasks.first?.isComplete == false)
+    #expect(try context.fetch(FetchDescriptor<CompletionArchive>()).first?.count == 1)
+}

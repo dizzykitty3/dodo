@@ -22,6 +22,8 @@ final class TaskRecord {
     var isUrgent = false
     var isPersonal = false
     var completedAt: Date?
+    var occurrenceKey: UUID?
+    var successorKey: UUID?
     var deletedAt: Date?
     var countedCompletion = false
     var group: TaskGroup?

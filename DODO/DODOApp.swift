@@ -7,6 +7,6 @@ struct DODOApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: TaskRecord.self)
+        .modelContainer(for: [TaskRecord.self, CompletionArchive.self])
     }
 }
