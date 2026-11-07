@@ -5,6 +5,9 @@ struct TaskEditor: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     let task: TaskRecord?
+    @Query(sort: \TaskGroup.createdAt) private var groups: [TaskGroup]
+    let presetGroup: TaskGroup?
+    @State private var group: TaskGroup?
     let presetToday: Bool
     let presetUrgent: Bool
     @State private var initialDate: Date
@@ -25,7 +28,9 @@ struct TaskEditor: View {
     @State private var confirmingDelete = false
     @State private var errorMessage: String?
 
-    init(task: TaskRecord? = nil, presetToday: Bool = false, presetUrgent: Bool = false, onDelete: @escaping () -> Void = {}, onCreate: @escaping () -> Void = {}) {
+    init(task: TaskRecord? = nil, presetToday: Bool = false, presetUrgent: Bool = false, presetGroup: TaskGroup? = nil, onDelete: @escaping () -> Void = {}, onCreate: @escaping () -> Void = {}) {
+        self.presetGroup = presetGroup
+        _group = State(initialValue: task?.group ?? presetGroup)
         self.presetToday = presetToday
         self.presetUrgent = presetUrgent
         self.onDelete = onDelete
@@ -50,6 +55,12 @@ struct TaskEditor: View {
             Section("Task") {
                 TextField("Title", text: $title)
                     .focused($focusedField, equals: .title)
+                if !groups.isEmpty {
+                    Picker("List", selection: $group) {
+                        Text("None").tag(nil as TaskGroup?)
+                        ForEach(groups) { Text($0.name).tag(Optional($0)) }
+                    }
+                }
                 Toggle("Urgent", isOn: $urgent)
             }
             Section("Schedule") {
@@ -122,7 +133,7 @@ struct TaskEditor: View {
         .confirmationDialog("Delete this task and its subtasks?", isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete task", role: .destructive) {
                 guard let task else { return }
-                context.delete(task)
+                task.deletedAt = .now
                 commit(afterSave: onDelete)
             }
         }
@@ -132,7 +143,7 @@ struct TaskEditor: View {
     }
 
     private var hasNewTaskChanges: Bool {
-        task == nil && (!title.isEmpty || urgent != presetUrgent || hasDate != presetToday || (hasDate && !Calendar.current.isDate(date, inSameDayAs: initialDate)) || rule != .never || !subtasks.isEmpty)
+        task == nil && (!title.isEmpty || group != presetGroup || urgent != presetUrgent || hasDate != presetToday || (hasDate && !Calendar.current.isDate(date, inSameDayAs: initialDate)) || rule != .never || !subtasks.isEmpty)
     }
 
     private func insertSubtask(at index: Int) {
@@ -151,6 +162,7 @@ struct TaskEditor: View {
         record.dueDay = hasDate ? date.formatted(TaskRecord.dayFormat) : nil
         record.repeatRule = rule.rawValue
         record.repeatDay = rule == .weekly ? weekday : rule == .monthly ? monthDay : nil
+        record.group = group
         record.isUrgent = urgent
         record.subtasks = subtasks.compactMap {
             var subtask = $0

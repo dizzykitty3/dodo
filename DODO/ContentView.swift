@@ -1,15 +1,32 @@
 import SwiftUI
 import SwiftData
 
-private enum TaskList: String, CaseIterable, Identifiable {
-    case today = "Today", urgent = "Urgent", completed = "Completed"
-    case scheduled = "Scheduled", all = "All Tasks"
+private enum TaskList: Hashable, Identifiable {
+    case today, urgent, completed, scheduled, all, deleted, custom(TaskGroup)
 
-    var isCompact: Bool { self == .all || self == .completed }
+    var title: String {
+        switch self {
+        case .today: "Today"
+        case .urgent: "Urgent"
+        case .completed: "Completed"
+        case .scheduled: "Scheduled"
+        case .all: "All Tasks"
+        case .deleted: "Recently Deleted"
+        case .custom(let group): group.name
+        }
+    }
+    var group: TaskGroup? {
+        if case .custom(let group) = self { return group }
+        return nil
+    }
+    var hasPreview: Bool { self == .today || self == .urgent }
+    var isCompact: Bool { self == .all || self == .completed || self == .deleted }
 
     var id: Self { self }
     var color: Color {
         switch self {
+        case .deleted: Color.gray
+        case .custom: Color.indigo
         case .all: Color(red: 0.37, green: 0.39, blue: 0.44)
         case .today: Color(red: 0.35, green: 0.56, blue: 0.72)
         case .urgent: Color(red: 0.73, green: 0.39, blue: 0.54)
@@ -19,6 +36,8 @@ private enum TaskList: String, CaseIterable, Identifiable {
     }
     var symbol: String {
         switch self {
+        case .deleted: "trash"
+        case .custom: "list.bullet"
         case .all: "tray.full.fill"
         case .today: "sun.max.fill"
         case .urgent: "star.fill"
@@ -37,7 +56,12 @@ struct ContentView: View {
     @AppStorage("todayPreviewLimit") private var todayPreviewLimit = 5
     @Query(sort: \TaskRecord.createdAt, order: .reverse) private var tasks: [TaskRecord]
     @State private var composeSource: TaskList?
-    @State private var composingFromSearch = false
+    @AppStorage("urgentPreviewLimit") private var urgentPreviewLimit = 5
+    @Query(sort: \TaskGroup.createdAt) private var groups: [TaskGroup]
+    @State private var searchSource: TaskList = .all
+    @State private var namingList = false
+    @State private var listName = ""
+    @State private var storageError: String?
     @State private var panel: Panel?
     @Environment(\.modelContext) private var context
     @State private var pendingRemoval: [PersistentIdentifier: Date] = [:]
@@ -50,13 +74,15 @@ struct ContentView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 12) {
+                    card(.urgent)
                     card(.today)
-                    HStack(spacing: 12) {
-                        card(.urgent)
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())], spacing: 12) {
                         card(.scheduled)
+                        ForEach(groups) { card(.custom($0)) }
                     }
                     card(.all)
                     card(.completed)
+                    card(.deleted)
                 }
                 .padding(.vertical, 6)
                 .padding(.horizontal, 20)
@@ -68,23 +94,39 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button("Search", systemImage: "magnifyingglass") {
-                        query = ""
-                        panel = .search
-                    }
-                    .labelStyle(.iconOnly)
+                    searchButton(from: .all)
                     Button("Settings", systemImage: "gearshape") { panel = .settings }
                         .labelStyle(.iconOnly)
+                }
+                ToolbarItem(placement: .bottomBar) {
+                    Button("New List", systemImage: "list.bullet.badge.plus") { listName = ""; namingList = true }
                 }
                 composeToolbar(from: nil)
             }
             .navigationDestination(for: TaskList.self) { list in
                 taskRows(items(list, includePending: true))
-                    .navigationTitle(list.rawValue)
+                    .navigationTitle(list.title)
                     .toolbar(.visible, for: .navigationBar)
-                    .toolbar { if list != .completed { composeToolbar(from: list) } }
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) { searchButton(from: list) }
+                        if list != .completed && list != .deleted { composeToolbar(from: list) }
+                    }
             }
         }
+        .alert("New List", isPresented: $namingList) {
+            TextField("List name", text: $listName)
+            Button("Cancel", role: .cancel) {}
+            Button("Create") {
+                let name = listName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty else { return }
+                context.insert(TaskGroup(name: name))
+                do { try context.save() } catch { context.rollback(); storageError = error.localizedDescription }
+            }
+            .disabled(listName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .alert("Couldn’t save changes", isPresented: Binding(get: { storageError != nil }, set: { if !$0 { storageError = nil } })) {
+            Button("OK") { storageError = nil }
+        } message: { Text(storageError ?? "") }
         .overlay { toastPill }
         .task(id: toastID) {
             guard toastID != nil else { return }
@@ -96,23 +138,14 @@ struct ContentView: View {
                 Group {
                     switch selected {
                     case .search:
-                        let matches = tasks.filter { query.isEmpty || $0.title.localizedStandardContains(query) }
-                        taskRows(matches, showsCheckbox: false)
-                            .overlay {
-                                if matches.isEmpty { ContentUnavailableView.search(text: query) }
-                            }
+                        searchResults
                             .navigationTitle("Search")
-                            .toolbar { composeToolbar(from: nil, inSearch: true) }
-                            .sheet(isPresented: $composingFromSearch, onDismiss: finishCompose) {
-                                NavigationStack { TaskEditor(onCreate: { didCreateTask = true }) }
-                                    .presentationDetents([.large])
-                            }
                             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search tasks")
                     case .settings:
-                        SettingsView(previewLimit: $todayPreviewLimit, completedCount: items(.completed).count)
+                        SettingsView(previewLimit: $todayPreviewLimit, urgentPreviewLimit: $urgentPreviewLimit, completedCount: tasks.filter(\.countedCompletion).count)
                     case .compose:
                         TaskEditor(presetToday: composeSource == .today, presetUrgent: composeSource == .urgent,
-                                   onCreate: { didCreateTask = true })
+                                   presetGroup: composeSource?.group, onCreate: { didCreateTask = true })
                     }
                 }
                 .toolbar {
@@ -136,12 +169,12 @@ struct ContentView: View {
     }
 
     @ToolbarContentBuilder
-    private func composeToolbar(from source: TaskList?, inSearch: Bool = false) -> some ToolbarContent {
+    private func composeToolbar(from source: TaskList?) -> some ToolbarContent {
         ToolbarSpacer(.flexible, placement: .bottomBar)
         ToolbarItem(placement: .bottomBar) {
             Button("New Task", systemImage: "square.and.pencil") {
                 composeSource = source
-                if inSearch { composingFromSearch = true } else { panel = .compose }
+                panel = .compose
             }
             .labelStyle(.iconOnly)
         }
@@ -165,10 +198,54 @@ struct ContentView: View {
         }
     }
 
-    private func taskRows(_ records: [TaskRecord], showsCheckbox: Bool = true) -> some View {
-        List(records) { record in
-            CompletionRow(record: record, onDelete: { showToast("Task deleted") },
-                          toggle: showsCheckbox ? { try toggleCompletion(record) } : nil)
+    private func searchButton(from source: TaskList) -> some View {
+        Button("Search", systemImage: "magnifyingglass") {
+            query = ""
+            searchSource = source
+            panel = .search
+        }
+        .labelStyle(.iconOnly)
+    }
+
+    private var searchResults: some View {
+        let matches = tasks.filter {
+            ($0.deletedAt == nil || searchSource == .deleted) && (query.isEmpty || $0.title.localizedStandardContains(query))
+        }
+        let localIDs = Set(items(searchSource).map(\.persistentModelID))
+        return List {
+            if searchSource == .all {
+                rows(matches, showsCheckbox: false)
+            } else {
+                let local = matches.filter { localIDs.contains($0.persistentModelID) }
+                let other = matches.filter { !localIDs.contains($0.persistentModelID) }
+                if !local.isEmpty { Section(searchSource.title) { rows(local, showsCheckbox: false) } }
+                if !other.isEmpty { Section("Other Tasks") { rows(other, showsCheckbox: false) } }
+            }
+        }
+        .overlay { if matches.isEmpty { ContentUnavailableView.search(text: query) } }
+    }
+
+    private func taskRows(_ records: [TaskRecord]) -> some View {
+        List { rows(records, showsCheckbox: true) }
+    }
+
+    private func rows(_ records: [TaskRecord], showsCheckbox: Bool) -> some View {
+        ForEach(records) { record in
+            if record.deletedAt != nil {
+                HStack {
+                    Text(record.title)
+                    Spacer()
+                    Button("Restore") {
+                        record.deletedAt = nil
+                        do { try context.save(); showToast("Task restored") }
+                        catch { context.rollback(); storageError = error.localizedDescription }
+                    }
+                    .buttonStyle(.glass)
+                }
+            } else {
+                CompletionRow(record: record, onDelete: { showToast("Task deleted") },
+                              toggle: showsCheckbox ? { try toggleCompletion(record) } : nil)
+            }
         }
     }
 
@@ -176,10 +253,13 @@ struct ContentView: View {
         let id = record.persistentModelID
         let previous = record.completedAt
         let completion = previous == nil ? Date.now : nil
+        let wasCounted = record.countedCompletion
+        if completion != nil { record.countedCompletion = true }
         record.completedAt = completion
         do {
             try context.save()
         } catch {
+            record.countedCompletion = wasCounted
             record.completedAt = previous
             throw error
         }
@@ -196,6 +276,9 @@ struct ContentView: View {
     private func items(_ list: TaskList, includePending: Bool = false) -> [TaskRecord] {
         let today = Date.now.formatted(TaskRecord.dayFormat)
         return tasks.filter { task in
+            if list == .deleted { return task.deletedAt != nil }
+            guard task.deletedAt == nil else { return false }
+            if list == .all { return true }
             if list == .completed { return task.completedAt != nil }
             guard task.completedAt == nil || (includePending && pendingRemoval[task.persistentModelID] == task.completedAt) else { return false }
             switch list {
@@ -203,25 +286,27 @@ struct ContentView: View {
             case .today: return task.dueDay.map { $0 <= today } ?? true
             case .urgent: return task.isUrgent
             case .scheduled: return task.dueDay != nil
-            case .completed: return false
+            case .custom(let group): return task.group == group
+            case .completed, .deleted: return false
             }
         }
     }
 
     private func card(_ list: TaskList) -> some View {
         let entries = items(list)
+        let limit = list == .urgent ? urgentPreviewLimit : todayPreviewLimit
         let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
         return NavigationLink(value: list) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center) {
                     Image(systemName: list.symbol).font(.title3.weight(.semibold))
-                    if list == .today { Text("Today").font(.title2.bold()) }
-                    if list.isCompact { Text(list.rawValue).font(.headline) }
+                    if list.hasPreview { Text(list.title).font(.title2.bold()) }
+                    if list.isCompact { Text(list.title).font(.headline) }
                     Spacer(minLength: 2)
                     Text("\(entries.count)").font(.title.bold()).monospacedDigit()
                 }
-                if list == .today {
-                    ForEach(entries.prefix(todayPreviewLimit == -1 ? entries.count : max(0, todayPreviewLimit))) { task in
+                if list.hasPreview {
+                    ForEach(entries.prefix(limit == -1 ? entries.count : max(0, limit))) { task in
                         Divider().overlay(.white.opacity(0.25))
                         HStack(spacing: 10) {
                             Image(systemName: "circle").foregroundStyle(.white.opacity(0.7))
@@ -229,12 +314,12 @@ struct ContentView: View {
                         }
                     }
                 } else if !list.isCompact {
-                    Text(list.rawValue).font(.headline)
+                    Text(list.title).font(.headline)
                 }
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, list == .today ? 20 : 16)
-            .padding(.vertical, list.isCompact ? 8 : list == .today ? 20 : 16)
+            .padding(.horizontal, list.hasPreview ? 20 : 16)
+            .padding(.vertical, list.isCompact ? 8 : list.hasPreview ? 20 : 16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(list.color.gradient, in: shape)
             .contentShape(shape)

@@ -2,18 +2,13 @@ import SwiftUI
 
 struct SettingsView: View {
     @Binding var previewLimit: Int
+    @Binding var urgentPreviewLimit: Int
     let completedCount: Int
 
     var body: some View {
         Form {
-            Section("Today Card") {
-                Picker("Task Preview Limit", selection: $previewLimit) {
-                    ForEach(0...5, id: \.self) { limit in
-                        Text(limit.formatted()).tag(limit)
-                    }
-                    Text("Unlimited").tag(-1)
-                }
-            }
+            previewSection("Urgent Card", limit: $urgentPreviewLimit)
+            previewSection("Today Card", limit: $previewLimit)
 
             Section("Stats & About") {
                 LabeledContent("Tasks Completed", value: completedCount.formatted())
@@ -26,6 +21,15 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+    }
+
+    private func previewSection(_ title: String, limit: Binding<Int>) -> some View {
+        Section(title) {
+            Picker("Task Preview Limit", selection: limit) {
+                ForEach(0...5, id: \.self) { Text($0.formatted()).tag($0) }
+                Text("Unlimited").tag(-1)
+            }
+        }
     }
 
     private var version: String {
