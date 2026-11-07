@@ -34,6 +34,7 @@ private enum Panel: Identifiable, Hashable {
 }
 
 struct ContentView: View {
+    @AppStorage("todayPreviewLimit") private var todayPreviewLimit = 5
     @Query(sort: \TaskRecord.createdAt, order: .reverse) private var tasks: [TaskRecord]
     @State private var composeSource: TaskList?
     @State private var composingFromSearch = false
@@ -108,7 +109,7 @@ struct ContentView: View {
                             }
                             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search tasks")
                     case .settings:
-                        Color.clear.navigationTitle("Settings")
+                        SettingsView(previewLimit: $todayPreviewLimit, completedCount: items(.completed).count)
                     case .compose:
                         TaskEditor(presetToday: composeSource == .today, presetUrgent: composeSource == .urgent,
                                    onCreate: { didCreateTask = true })
@@ -220,7 +221,7 @@ struct ContentView: View {
                     Text("\(entries.count)").font(.title.bold()).monospacedDigit()
                 }
                 if list == .today {
-                    ForEach(entries.prefix(5)) { task in
+                    ForEach(entries.prefix(todayPreviewLimit == -1 ? entries.count : max(0, todayPreviewLimit))) { task in
                         Divider().overlay(.white.opacity(0.25))
                         HStack(spacing: 10) {
                             Image(systemName: "circle").foregroundStyle(.white.opacity(0.7))
