@@ -465,12 +465,7 @@ private struct TaskBadges: View {
                 Image(systemName: "repeat").accessibilityLabel("Repeating")
             }
             if let day = record.dueDay {
-                Text(day)
-                    .font(.caption)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(.quaternary, in: Capsule())
-                    .accessibilityLabel("Due " + day)
+                TaskDateBadge(day: day)
             }
         }
         .foregroundStyle(.secondary)

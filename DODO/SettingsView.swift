@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Binding var sortScheduled: Bool
     @Binding var sortCompleted: Bool
     @AppStorage("completedCleanupInterval") private var cleanupInterval = CleanupInterval.never
+    var dateBadge = DateBadgePreferences()
     let completedCount: Int
 
     var body: some View {
@@ -16,6 +17,23 @@ struct SettingsView: View {
             Section("List Sorting") {
                 Toggle("Sort Scheduled by Due Date", isOn: $sortScheduled)
                 Toggle("Sort Completed by Completion Time", isOn: $sortCompleted)
+            }
+
+            Section("Date Badges") {
+                Picker("Date Order", selection: dateBadge.$order) {
+                    ForEach(DateBadgeOrder.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                Picker("Separator", selection: dateBadge.$separator) {
+                    ForEach(DateBadgeSeparator.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                Toggle("Show Year for This Year", isOn: dateBadge.$showsCurrentYear)
+                let year = Calendar(identifier: .gregorian).component(.year, from: .now)
+                LabeledContent("Preview") {
+                    HStack {
+                        TaskDateBadge(day: "\(year)-03-24")
+                        TaskDateBadge(day: "\(year + 1)-03-24")
+                    }
+                }
             }
 
             Section {
