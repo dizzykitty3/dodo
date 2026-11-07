@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct DODOApp: App {
@@ -6,5 +7,6 @@ struct DODOApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: TaskRecord.self)
     }
 }

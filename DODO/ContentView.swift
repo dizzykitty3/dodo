@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 private enum TaskList: String, CaseIterable, Identifiable {
     case today = "Today", urgent = "Urgent", completed = "Completed"
@@ -25,29 +26,15 @@ private enum TaskList: String, CaseIterable, Identifiable {
     }
 }
 
-private struct DemoTask: Identifiable {
-    let id = UUID()
-    let title: String
-    var lists: Set<TaskList>
-}
-
 private enum Panel: Identifiable, Hashable {
     case search, settings, compose
     var id: Self { self }
 }
 
 struct ContentView: View {
-    @State private var tasks = [
-        DemoTask(title: "Pick up the film prints", lists: [.today, .personal]),
-        DemoTask(title: "Review the weekend itinerary", lists: [.today, .urgent, .scheduled]),
-        DemoTask(title: "Water the balcony plants", lists: [.today, .personal]),
-        DemoTask(title: "Return the library books", lists: [.today, .scheduled]),
-        DemoTask(title: "Book a table for Friday", lists: [.scheduled, .personal]),
-        DemoTask(title: "Send the photos to Alex", lists: [.completed])
-    ]
+    @Query(sort: \TaskRecord.createdAt, order: .reverse) private var tasks: [TaskRecord]
     @State private var panel: Panel?
     @State private var query = ""
-    @State private var draft = ""
 
     var body: some View {
         NavigationStack {
@@ -79,14 +66,13 @@ struct ContentView: View {
                 ToolbarSpacer(.flexible, placement: .bottomBar)
                 ToolbarItem(placement: .bottomBar) {
                     Button("New Task", systemImage: "square.and.pencil") {
-                        draft = ""
                         panel = .compose
                     }
                     .labelStyle(.iconOnly)
                 }
             }
             .navigationDestination(for: TaskList.self) { list in
-                List(items(list)) { Text($0.title) }
+                taskRows(items(list))
                     .navigationTitle(list.rawValue)
                     .toolbar(.visible, for: .navigationBar)
             }
@@ -97,7 +83,7 @@ struct ContentView: View {
                     switch selected {
                     case .search:
                         let matches = tasks.filter { query.isEmpty || $0.title.localizedStandardContains(query) }
-                        List(matches) { Text($0.title) }
+                        taskRows(matches)
                             .overlay {
                                 if matches.isEmpty { ContentUnavailableView.search(text: query) }
                             }
@@ -106,17 +92,7 @@ struct ContentView: View {
                     case .settings:
                         Color.clear.navigationTitle("Settings")
                     case .compose:
-                        Form {
-                            TextField("Task title", text: $draft)
-                                .onSubmit { addTask() }
-                        }
-                        .navigationTitle("New Task")
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("Add") { addTask() }
-                                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                            }
-                        }
+                        TaskEditor()
                     }
                 }
                 .toolbar {
@@ -129,15 +105,32 @@ struct ContentView: View {
         }
     }
 
-    private func items(_ list: TaskList) -> [DemoTask] {
-        tasks.filter { $0.lists.contains(list) }
+    private func taskRows(_ records: [TaskRecord]) -> some View {
+        List(records) { record in
+            NavigationLink {
+                TaskEditor(task: record)
+            } label: {
+                HStack {
+                    Text(record.title)
+                    if record.isUrgent { Image(systemName: "flag.fill").foregroundStyle(.orange).accessibilityLabel("Urgent") }
+                }
+            }
+        }
     }
 
-    private func addTask() {
-        let title = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { return }
-        tasks.insert(DemoTask(title: title, lists: [.today]), at: 0)
-        panel = nil
+    private func items(_ list: TaskList) -> [TaskRecord] {
+        let today = Date.now.formatted(TaskRecord.dayFormat)
+        return tasks.filter { task in
+            if list == .completed { return task.completedAt != nil }
+            guard task.completedAt == nil else { return false }
+            switch list {
+            case .today: return task.dueDay.map { $0 <= today } ?? true
+            case .urgent: return task.isUrgent
+            case .scheduled: return task.dueDay != nil
+            case .personal: return task.isPersonal
+            case .completed: return false
+            }
+        }
     }
 
     private func card(_ list: TaskList) -> some View {
@@ -174,4 +167,4 @@ struct ContentView: View {
     }
 }
 
-#Preview { ContentView() }
+#Preview { ContentView().modelContainer(for: TaskRecord.self, inMemory: true) }
