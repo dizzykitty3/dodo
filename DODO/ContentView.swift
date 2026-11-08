@@ -88,10 +88,7 @@ struct ContentView: View {
     @AppStorage("sortScheduledByDate") private var sortScheduled = true
     @AppStorage("sortCompletedByDate") private var sortCompleted = true
     @State private var pendingRemoval: [PersistentIdentifier: Date] = [:]
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var createdID: PersistentIdentifier?
-    @State private var fadingOut: Set<PersistentIdentifier> = []
-    private let fadeDuration = 0.25
+    @State private var didCreateTask = false
     @State private var toastMessage = ""
     @State private var toastID: UUID?
     @State private var query = ""
@@ -178,7 +175,7 @@ struct ContentView: View {
                                      completedCount: archives.reduce(0) { $0 + $1.count } + tasks.filter(\.countedCompletion).count)
                     case .compose(let composeSource):
                         TaskEditor(presetToday: composeSource == .today, presetUrgent: composeSource == .urgent,
-                                   presetGroup: composeSource?.group, onCreate: { createdID = $0.persistentModelID })
+                                   presetGroup: composeSource?.group, onCreate: { didCreateTask = true })
                     }
                 }
                 .toolbar {
@@ -195,8 +192,8 @@ struct ContentView: View {
     }
 
     private func finishCompose() {
-        if createdID != nil {
-            withAnimation(reduceMotion ? nil : .easeOut(duration: fadeDuration)) { createdID = nil }
+        if didCreateTask {
+            didCreateTask = false
             showToast("Task saved")
         }
     }
@@ -265,11 +262,11 @@ struct ContentView: View {
                 daySection("Today", records.filter { $0.dueDay == today })
                 daySection("No Date", records.filter { $0.dueDay == nil })
             } else if list == .scheduled && sortScheduled {
-                rows(records.sorted { ($0.dueDay ?? "") < ($1.dueDay ?? "") }, showsCheckbox: true, fadesCompleted: true)
+                rows(records.sorted { ($0.dueDay ?? "") < ($1.dueDay ?? "") }, showsCheckbox: true)
             } else if list == .completed && sortCompleted {
                 rows(records.sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }, showsCheckbox: true)
             } else {
-                rows(records, showsCheckbox: true, fadesCompleted: list != .all && list != .completed)
+                rows(records, showsCheckbox: true)
             }
         }
         .overlay {
@@ -290,10 +287,10 @@ struct ContentView: View {
 
     @ViewBuilder
     private func daySection(_ title: String, _ records: [TaskRecord]) -> some View {
-        if !records.isEmpty { Section(title) { rows(records, showsCheckbox: true, fadesCompleted: true) } }
+        if !records.isEmpty { Section(title) { rows(records, showsCheckbox: true) } }
     }
 
-    private func rows(_ records: [TaskRecord], showsCheckbox: Bool, fadesCompleted: Bool = false) -> some View {
+    private func rows(_ records: [TaskRecord], showsCheckbox: Bool) -> some View {
         ForEach(records) { record in
             if record.deletedAt != nil {
                 VStack(alignment: .leading, spacing: 6) {
@@ -314,7 +311,6 @@ struct ContentView: View {
             } else {
                 CompletionRow(record: record, onDelete: { showToast("Task deleted") },
                               toggle: showsCheckbox ? { child in try toggleCompletion(record, child: child) } : nil)
-                    .opacity(record.persistentModelID == createdID || (fadesCompleted && fadingOut.contains(record.persistentModelID)) ? 0 : 1)
             }
         }
     }
@@ -341,19 +337,12 @@ struct ContentView: View {
         UISelectionFeedbackGenerator().selectionChanged()
         let completion = record.completedAt
         guard previous != completion else { return }
-        fadingOut.remove(id)
         pendingRemoval[id] = completion
         guard let completion else { return }
         Task { @MainActor in
             do { try await Task.sleep(for: .seconds(2)) } catch { return }
             guard pendingRemoval[id] == completion else { return }
-            if !reduceMotion {
-                withAnimation(.easeIn(duration: fadeDuration)) { _ = fadingOut.insert(id) }
-                try? await Task.sleep(for: .seconds(fadeDuration))
-                guard pendingRemoval[id] == completion else { return }
-            }
             pendingRemoval[id] = nil
-            fadingOut.remove(id)
         }
     }
 
@@ -396,7 +385,6 @@ struct ContentView: View {
                             Image(systemName: "circle").foregroundStyle(.white.opacity(0.7))
                             Text(task.title).font(.body)
                         }
-                        .opacity(task.persistentModelID == createdID ? 0 : 1)
                     }
                 } else if !list.isCompact {
                     Text(list.title).font(.headline)

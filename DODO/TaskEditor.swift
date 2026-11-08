@@ -12,7 +12,7 @@ struct TaskEditor: View {
     let presetUrgent: Bool
     @State private var initialDate: Date
     let onDelete: () -> Void
-    let onCreate: (TaskRecord) -> Void
+    let onCreate: () -> Void
 
     @State private var linkText: String
     @State private var title: String
@@ -29,7 +29,7 @@ struct TaskEditor: View {
     @State private var confirmingDelete = false
     @State private var errorMessage: String?
 
-    init(task: TaskRecord? = nil, presetToday: Bool = false, presetUrgent: Bool = false, presetGroup: TaskGroup? = nil, onDelete: @escaping () -> Void = {}, onCreate: @escaping (TaskRecord) -> Void = { _ in }) {
+    init(task: TaskRecord? = nil, presetToday: Bool = false, presetUrgent: Bool = false, presetGroup: TaskGroup? = nil, onDelete: @escaping () -> Void = {}, onCreate: @escaping () -> Void = {}) {
         self.presetGroup = presetGroup
         _group = State(initialValue: task?.group ?? presetGroup)
         self.presetToday = presetToday
@@ -202,7 +202,7 @@ struct TaskEditor: View {
             errorMessage = error.localizedDescription
             return
         }
-        commit { if task == nil { onCreate(record) } }
+        commit { if task == nil { onCreate() } }
     }
 
     private func commit(afterSave: () -> Void) {
