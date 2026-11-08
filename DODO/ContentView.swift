@@ -117,12 +117,13 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button { panel = .newList } label: {
+                        Image(systemName: "text.badge.plus")
+                    }
+                    .accessibilityLabel("New List")
                     searchButton(from: .all)
                     Button("Settings", systemImage: "gearshape") { panel = .settings }
                         .labelStyle(.iconOnly)
-                }
-                ToolbarItem(placement: .bottomBar) {
-                    Button("New List", systemImage: "list.bullet.badge.plus") { panel = .newList }
                 }
                 composeToolbar(from: nil)
             }
