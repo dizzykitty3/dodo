@@ -112,3 +112,27 @@ import Testing
     #expect(task.completedAt == nil && task.successorKey == nil && task.countedCompletion)
     #expect(try context.fetchCount(FetchDescriptor<TaskRecord>()) == 1)
 }
+
+@MainActor
+@Test func weekendAndCustomRepeatsFollowSelectedDays() throws {
+    let store = try ModelContainer(for: TaskRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    let context = store.mainContext
+    for (rule, days, completion, expected) in [
+        (RepeatRule.weekends, [], "2026-11-06", "2026-11-07"),
+        (.weekends, [], "2026-11-07", "2026-11-08"),
+        (.weekends, [], "2026-11-08", "2026-11-14"),
+        (.custom, [1, 3], "2026-11-08", "2026-11-10"),
+        (.custom, [1, 3], "2026-11-10", "2026-11-15")
+    ] {
+        let task = TaskRecord(title: "Practice")
+        task.repeatRule = rule.rawValue
+        task.repeatWeekdays = days
+        task.completedAt = try TaskRecord.dayFormat.parseStrategy.parse(completion)
+        context.insert(task)
+        CompletedTaskCleanup.scheduleNext(after: task, context: context)
+        try context.save()
+        let key = try #require(task.successorKey)
+        let successor = try #require(context.fetch(FetchDescriptor<TaskRecord>()).first { $0.occurrenceKey == key })
+        #expect(successor.dueDay == expected && successor.repeatWeekdays == days && successor.repeatRule == rule.rawValue)
+    }
+}

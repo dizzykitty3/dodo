@@ -19,6 +19,7 @@ struct TaskEditor: View {
     @State private var hasDate: Bool
     @State private var date: Date
     @State private var rule: RepeatRule
+    @State private var selectedWeekdays: Set<Int>
     @State private var weekday: Int
     @State private var monthDay: Int
     @State private var urgent: Bool
@@ -46,6 +47,7 @@ struct TaskEditor: View {
         _date = State(initialValue: date)
         _hasDate = State(initialValue: task?.dueDay != nil || presetToday)
         _rule = State(initialValue: rule)
+        _selectedWeekdays = State(initialValue: Set(task?.repeatWeekdays ?? []))
         _weekday = State(initialValue: (rule == .weekly ? task?.repeatDay : nil) ?? calendar.component(.weekday, from: date))
         _monthDay = State(initialValue: (rule == .monthly ? task?.repeatDay : nil) ?? calendar.component(.day, from: date))
         _urgent = State(initialValue: task?.isUrgent ?? presetUrgent)
@@ -87,6 +89,19 @@ struct TaskEditor: View {
                     }
                 } else if rule == .monthly {
                     Stepper("Day of month: \(monthDay)", value: $monthDay, in: 1...31)
+                } else if rule == .custom {
+                    ForEach(1...7, id: \.self) { day in
+                        Toggle(Calendar.current.weekdaySymbols[day - 1], isOn: Binding(
+                            get: { selectedWeekdays.contains(day) },
+                            set: { selected in
+                                if selected { selectedWeekdays.insert(day) }
+                                else { selectedWeekdays.remove(day) }
+                            }
+                        ))
+                    }
+                    if selectedWeekdays.isEmpty {
+                        Text("Select at least one day.").font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
             }
             Section("Subtasks") {
@@ -140,7 +155,7 @@ struct TaskEditor: View {
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") { save() }
-                    .disabled(cleanTitle.isEmpty || invalidLink)
+                    .disabled(!canSave)
             }
         }
         .confirmationDialog("Delete this task and its subtasks?", isPresented: $confirmingDelete, titleVisibility: .visible) {
@@ -179,14 +194,19 @@ struct TaskEditor: View {
     }
     private var invalidLink: Bool { !trimmedLink.isEmpty && webURL == nil }
 
+    private var canSave: Bool {
+        !cleanTitle.isEmpty && !invalidLink && (rule != .custom || !selectedWeekdays.isEmpty)
+    }
+
     private func save() {
-        guard !cleanTitle.isEmpty, !invalidLink else { return }
+        guard canSave else { return }
         let record = task ?? TaskRecord(title: cleanTitle)
         if task == nil { context.insert(record) }
         record.link = webURL
         record.title = cleanTitle
         record.dueDay = hasDate ? date.formatted(TaskRecord.dayFormat) : nil
         record.repeatRule = rule.rawValue
+        record.repeatWeekdays = rule == .custom ? selectedWeekdays.sorted() : []
         record.repeatDay = rule == .weekly ? weekday : rule == .monthly ? monthDay : nil
         record.group = group
         record.isUrgent = urgent

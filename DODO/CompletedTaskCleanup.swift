@@ -99,6 +99,8 @@ enum CompletedTaskCleanup {
         let anchor = calendar.startOfDay(for: max(scheduled ?? completion, completion))
         let weekday = record.repeatDay ?? calendar.component(.weekday, from: scheduled ?? completion)
         let monthDay = record.repeatDay ?? calendar.component(.day, from: scheduled ?? completion)
+        let selectedDays = Set(record.repeatWeekdays.filter { (1...7).contains($0) })
+        guard rule != .custom || !selectedDays.isEmpty else { return }
         var date = anchor
         repeat {
             guard let day = calendar.date(byAdding: .day, value: 1, to: date) else { return }
@@ -107,6 +109,10 @@ enum CompletedTaskCleanup {
             case .daily: break
             case .weekdays:
                 if [1, 7].contains(calendar.component(.weekday, from: date)) { continue }
+            case .weekends:
+                if ![1, 7].contains(calendar.component(.weekday, from: date)) { continue }
+            case .custom:
+                if !selectedDays.contains(calendar.component(.weekday, from: date)) { continue }
             case .weekly:
                 if calendar.component(.weekday, from: date) != min(7, max(1, weekday)) { continue }
             case .monthly:
@@ -122,6 +128,7 @@ enum CompletedTaskCleanup {
         record.successorKey = key
         next.dueDay = date.formatted(TaskRecord.dayFormat)
         next.repeatRule = record.repeatRule
+        next.repeatWeekdays = record.repeatWeekdays
         next.repeatDay = record.repeatDay
         next.link = record.link
         next.group = record.group

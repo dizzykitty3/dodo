@@ -2,7 +2,8 @@ import Foundation
 import SwiftData
 
 enum RepeatRule: String, CaseIterable {
-    case never = "Never", daily = "Daily", weekdays = "Weekdays", weekly = "Weekly", monthly = "Monthly"
+    case never = "Never", daily = "Daily", weekdays = "Weekdays", weekends = "Weekends"
+    case weekly = "Weekly", monthly = "Monthly", custom = "Custom"
 }
 
 struct Subtask: Codable, Identifiable {
@@ -20,6 +21,7 @@ final class TaskRecord {
     var dueDay: String?
     var repeatRule = RepeatRule.never.rawValue
     var repeatDay: Int?
+    var repeatWeekdays: [Int] = []
     var isUrgent = false
     var isPersonal = false
     var completedAt: Date?
