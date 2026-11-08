@@ -14,6 +14,7 @@ struct TaskEditor: View {
     let onDelete: () -> Void
     let onCreate: (TaskRecord) -> Void
 
+    @State private var linkText: String
     @State private var title: String
     @State private var hasDate: Bool
     @State private var date: Date
@@ -39,6 +40,7 @@ struct TaskEditor: View {
         let date = task?.dueDay.flatMap { try? TaskRecord.dayFormat.parseStrategy.parse($0) } ?? .now
         let rule = RepeatRule(rawValue: task?.repeatRule ?? "") ?? .never
         let calendar = Calendar(identifier: .gregorian)
+        _linkText = State(initialValue: task?.link?.absoluteString ?? "")
         _title = State(initialValue: task?.title ?? "")
         _initialDate = State(initialValue: date)
         _date = State(initialValue: date)
@@ -56,6 +58,15 @@ struct TaskEditor: View {
                 TextField("Title", text: $title, axis: .vertical)
                     .fixedSize(horizontal: false, vertical: true)
                     .focused($focusedField, equals: .title)
+                TextField("Link", text: $linkText, prompt: Text("Website link (optional)"))
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                if invalidLink {
+                    Text("Enter a web address, such as https://example.com.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
                 if !groups.isEmpty {
                     Picker("List", selection: $group) {
                         Text("None").tag(nil as TaskGroup?)
@@ -129,7 +140,7 @@ struct TaskEditor: View {
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") { save() }
-                    .disabled(cleanTitle.isEmpty)
+                    .disabled(cleanTitle.isEmpty || invalidLink)
             }
         }
         .confirmationDialog("Delete this task and its subtasks?", isPresented: $confirmingDelete, titleVisibility: .visible) {
@@ -145,7 +156,7 @@ struct TaskEditor: View {
     }
 
     private var hasNewTaskChanges: Bool {
-        task == nil && (!title.isEmpty || group != presetGroup || urgent != presetUrgent || hasDate != presetToday || (hasDate && !Calendar.current.isDate(date, inSameDayAs: initialDate)) || rule != .never || !subtasks.isEmpty)
+        task == nil && (!title.isEmpty || !linkText.isEmpty || group != presetGroup || urgent != presetUrgent || hasDate != presetToday || (hasDate && !Calendar.current.isDate(date, inSameDayAs: initialDate)) || rule != .never || !subtasks.isEmpty)
     }
 
     private func insertSubtask(at index: Int) {
@@ -156,10 +167,23 @@ struct TaskEditor: View {
 
     private var cleanTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
 
+    private var trimmedLink: String { linkText.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var webURL: URL? {
+        guard !trimmedLink.isEmpty else { return nil }
+        let candidate = URLComponents(string: trimmedLink)?.scheme == nil ? "https://" + trimmedLink : trimmedLink
+        guard let url = URL(string: candidate),
+              let scheme = url.scheme?.lowercased(), ["https", "http"].contains(scheme),
+              let host = url.host(percentEncoded: false), !host.isEmpty,
+              host.rangeOfCharacter(from: .whitespacesAndNewlines) == nil else { return nil }
+        return url
+    }
+    private var invalidLink: Bool { !trimmedLink.isEmpty && webURL == nil }
+
     private func save() {
-        guard !cleanTitle.isEmpty else { return }
+        guard !cleanTitle.isEmpty, !invalidLink else { return }
         let record = task ?? TaskRecord(title: cleanTitle)
         if task == nil { context.insert(record) }
+        record.link = webURL
         record.title = cleanTitle
         record.dueDay = hasDate ? date.formatted(TaskRecord.dayFormat) : nil
         record.repeatRule = rule.rawValue

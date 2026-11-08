@@ -296,17 +296,20 @@ struct ContentView: View {
     private func rows(_ records: [TaskRecord], showsCheckbox: Bool, fadesCompleted: Bool = false) -> some View {
         ForEach(records) { record in
             if record.deletedAt != nil {
-                HStack {
-                    Text(record.title)
-                    TaskBadges(record: record)
-                    Spacer()
-                    Button("Restore") {
-                        record.restoredCompletion = record.completedAt
-                        record.deletedAt = nil
-                        do { try context.save(); showToast("Task restored") }
-                        catch { context.rollback(); storageError = error.localizedDescription }
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(record.title)
+                        TaskBadges(record: record)
+                        Spacer()
+                        Button("Restore") {
+                            record.restoredCompletion = record.completedAt
+                            record.deletedAt = nil
+                            do { try context.save(); showToast("Task restored") }
+                            catch { context.rollback(); storageError = error.localizedDescription }
+                        }
+                        .buttonStyle(.glass)
                     }
-                    .buttonStyle(.glass)
+                    if let url = record.link { TaskLinkButton(url: url) }
                 }
             } else {
                 CompletionRow(record: record, onDelete: { showToast("Task deleted") },
@@ -442,6 +445,11 @@ private struct CompletionRow: View {
                     .foregroundStyle(completed ? .secondary : .primary)
                 }
             }
+            if let url = record.link {
+                TaskLinkButton(url: url)
+                    .padding(.leading, toggle == nil ? 0 : 50)
+                    .padding(.vertical, 4)
+            }
             if let toggle {
                 ForEach(record.displayedSubtasks) { child in
                     Button {
@@ -463,6 +471,19 @@ private struct CompletionRow: View {
         .alert("Couldn’t update task", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
         } message: { Text(errorMessage ?? "") }
+    }
+}
+
+private struct TaskLinkButton: View {
+    let url: URL
+
+    var body: some View {
+        Link(destination: url) {
+            Label("Open Link", systemImage: "arrow.up.right.square")
+        }
+        .buttonStyle(.glass)
+        .controlSize(.small)
+        .accessibilityHint(url.host() ?? url.absoluteString)
     }
 }
 

@@ -14,6 +14,7 @@ struct Subtask: Codable, Identifiable {
 @Model
 final class TaskRecord {
     var title: String
+    var link: URL?
     var createdAt = Date.now
     // Store a calendar day independently of time zone and daylight saving changes.
     var dueDay: String?

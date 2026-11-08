@@ -123,6 +123,7 @@ enum CompletedTaskCleanup {
         next.dueDay = date.formatted(TaskRecord.dayFormat)
         next.repeatRule = record.repeatRule
         next.repeatDay = record.repeatDay
+        next.link = record.link
         next.group = record.group
         next.isUrgent = record.isUrgent
         next.subtasks = record.subtasks.map { Subtask(title: $0.title) }
