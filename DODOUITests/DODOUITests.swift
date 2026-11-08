@@ -23,7 +23,7 @@ final class DODOUITests: XCTestCase {
 
         func addTask(_ title: String) {
             app.buttons["New Task"].tap()
-            let field = app.descendants(matching: .any).matching(identifier: "Title").firstMatch
+            let field = app.textViews["Title"]
             XCTAssertTrue(field.waitForExistence(timeout: 5))
             field.tap()
             field.typeText(title)
@@ -49,6 +49,30 @@ final class DODOUITests: XCTestCase {
         for title in ["Projects", "Other Tasks", "Inside task", "Outside task"] {
             XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label ==[c] %@", title)).firstMatch.exists, title)
         }
+    }
+
+    @MainActor
+    func testReturnSavesWrappedTaskTitleOnCreateAndEdit() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-test-in-memory"]
+        app.launch()
+        app.buttons["New Task"].tap()
+        let field = app.textViews["Title"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        let originalHeight = field.frame.height
+        let title = "Review the project schedule and prepare detailed notes for the next planning meeting"
+        field.typeText(title)
+        XCTAssertGreaterThan(field.frame.height, originalHeight)
+        app.typeText("\n")
+        XCTAssertTrue(app.navigationBars["New Task"].waitForNonExistence(timeout: 5))
+        app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "All Tasks")).firstMatch.tap()
+        app.staticTexts[title].tap()
+        XCTAssertTrue(app.navigationBars["Edit Task"].waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("Updated title")
+        field.typeText("\n")
+        XCTAssertTrue(app.navigationBars["Edit Task"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Updated title")).firstMatch.waitForExistence(timeout: 5))
     }
 
     @MainActor

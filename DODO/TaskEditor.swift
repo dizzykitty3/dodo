@@ -15,6 +15,7 @@ struct TaskEditor: View {
     let onCreate: () -> Void
 
     @State private var linkText: String
+    @State private var titleFocusRequest = 0
     @State private var title: String
     @State private var hasDate: Bool
     @State private var date: Date
@@ -24,8 +25,9 @@ struct TaskEditor: View {
     @State private var monthDay: Int
     @State private var urgent: Bool
     @State private var subtasks: [Subtask]
-    private enum Field: Hashable { case title, subtask(UUID) }
+    private enum Field: Hashable { case subtask(UUID) }
     @FocusState private var focusedField: Field?
+    @State private var didSave = false
     @State private var confirmingDiscard = false
     @State private var confirmingDelete = false
     @State private var errorMessage: String?
@@ -42,7 +44,7 @@ struct TaskEditor: View {
         let rule = RepeatRule(rawValue: task?.repeatRule ?? "") ?? .never
         let calendar = Calendar(identifier: .gregorian)
         _linkText = State(initialValue: task?.link?.absoluteString ?? "")
-        _title = State(initialValue: task?.title ?? "")
+        _title = State(initialValue: Self.singleLine(task?.title ?? ""))
         _initialDate = State(initialValue: date)
         _date = State(initialValue: date)
         _hasDate = State(initialValue: task?.dueDay != nil || presetToday)
@@ -57,9 +59,12 @@ struct TaskEditor: View {
     var body: some View {
         Form {
             Section("Task") {
-                TextField("Title", text: $title, axis: .vertical)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .focused($focusedField, equals: .title)
+                TaskTitleInput(text: $title, focusOnAppearance: task == nil, focusRequest: titleFocusRequest, submit: save)
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(TapGesture().onEnded { titleFocusRequest += 1 })
+                    .overlay(alignment: .topLeading) {
+                        if title.isEmpty { Text("Title").foregroundStyle(.tertiary).allowsHitTesting(false).accessibilityHidden(true) }
+                    }
                 TextField("Link", text: $linkText, prompt: Text("Website link (optional)"))
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
@@ -136,9 +141,6 @@ struct TaskEditor: View {
                     .foregroundStyle(.red)
             }
         }
-        .onAppear {
-            if task == nil { focusedField = .title }
-        }
         .navigationTitle(task == nil ? "New Task" : "Edit Task")
         .interactiveDismissDisabled(hasNewTaskChanges)
         .toolbar {
@@ -180,6 +182,10 @@ struct TaskEditor: View {
         focusedField = .subtask(next.id)
     }
 
+    private static func singleLine(_ text: String) -> String {
+        text.components(separatedBy: .newlines).filter { !$0.isEmpty }.joined(separator: " ")
+    }
+
     private var cleanTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private var trimmedLink: String { linkText.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -199,7 +205,7 @@ struct TaskEditor: View {
     }
 
     private func save() {
-        guard canSave else { return }
+        guard canSave, !didSave else { return }
         let record = task ?? TaskRecord(title: cleanTitle)
         if task == nil { context.insert(record) }
         record.link = webURL
