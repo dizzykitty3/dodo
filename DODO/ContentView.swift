@@ -296,7 +296,7 @@ struct ContentView: View {
             if record.deletedAt != nil {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text(record.title)
+                        TaskTitle(title: record.title)
                         TaskBadges(record: record)
                         Spacer()
                         Button("Restore") {
@@ -307,7 +307,7 @@ struct ContentView: View {
                         }
                         .buttonStyle(.glass)
                     }
-                    if let url = record.link { TaskLinkButton(url: url) }
+                    TaskListDetails(record: record)
                 }
             } else {
                 CompletionRow(record: record, onDelete: { showToast("Task deleted") },
@@ -384,7 +384,7 @@ struct ContentView: View {
                         Divider().overlay(.white.opacity(0.25))
                         HStack(spacing: 10) {
                             Image(systemName: "circle").foregroundStyle(.white.opacity(0.7))
-                            Text(task.title).font(.body)
+                            TaskTitle(title: task.title).font(.body)
                         }
                     }
                 } else if !list.isCompact {
@@ -411,7 +411,7 @@ private struct CompletionRow: View {
     var body: some View {
         let completed = record.completedAt != nil
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 6) {
+            HStack(alignment: record.link == nil && record.group == nil ? .center : .top, spacing: 6) {
                 if let toggle {
                     Button {
                         do { try toggle(nil) } catch { errorMessage = error.localizedDescription }
@@ -424,20 +424,20 @@ private struct CompletionRow: View {
                     .disabled(!record.subtasks.isEmpty)
                     .accessibilityLabel(completed ? "Restore " + record.title : "Complete " + record.title)
                 }
-                NavigationLink {
-                    TaskEditor(task: record, onDelete: onDelete)
-                } label: {
-                    HStack {
-                        Text(record.title).fontWeight(record.subtasks.isEmpty ? .regular : .semibold).strikethrough(completed)
-                        TaskBadges(record: record)
+                VStack(alignment: .leading, spacing: 0) {
+                    NavigationLink {
+                        TaskEditor(task: record, onDelete: onDelete)
+                    } label: {
+                        HStack {
+                            TaskTitle(title: record.title).fontWeight(record.subtasks.isEmpty ? .regular : .semibold).strikethrough(completed)
+                            TaskBadges(record: record)
+                        }
+                        .foregroundStyle(completed ? .secondary : .primary)
                     }
-                    .foregroundStyle(completed ? .secondary : .primary)
+                    if record.link != nil || record.group != nil {
+                        TaskListDetails(record: record)
+                    }
                 }
-            }
-            if let url = record.link {
-                TaskLinkButton(url: url)
-                    .padding(.leading, toggle == nil ? 0 : 50)
-                    .padding(.vertical, 4)
             }
             if let toggle {
                 ForEach(record.displayedSubtasks) { child in
@@ -447,7 +447,7 @@ private struct CompletionRow: View {
                         HStack(spacing: 6) {
                             Image(systemName: child.isComplete ? "checkmark.circle.fill" : "circle")
                                 .frame(width: 44, height: 44)
-                            Text(child.title).strikethrough(child.isComplete)
+                            TaskTitle(title: child.title).strikethrough(child.isComplete)
                         }
                         .foregroundStyle(child.isComplete || completed ? Color.secondary : Color.primary)
                     }
@@ -457,9 +457,42 @@ private struct CompletionRow: View {
                 }
             }
         }
+        .listRowInsets(.vertical, 4)
         .alert("Couldn’t update task", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
         } message: { Text(errorMessage ?? "") }
+    }
+}
+
+private struct TaskTitle: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .lineLimit(nil)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private struct TaskListDetails: View {
+    let record: TaskRecord
+
+    var body: some View {
+        if record.link != nil || record.group != nil {
+            HStack(spacing: 8) {
+                if let url = record.link { TaskLinkButton(url: url) }
+                if let group = record.group {
+                    Text(group.name)
+                        .font(.subheadline)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.quaternary, in: Capsule())
+                        .accessibilityLabel("List: " + group.name)
+                }
+            }
+            .padding(.vertical, 4)
+        }
     }
 }
 
