@@ -6,6 +6,7 @@ struct CustomListsView: View {
     @Query(sort: TaskGroup.displayOrder) private var groups: [TaskGroup]
     @State private var selection: TaskGroup?
     @State private var editingGroup: TaskGroup?
+    @State private var creatingList = false
     @State private var deleting = false
     @State private var error: String?
 
@@ -37,16 +38,15 @@ struct CustomListsView: View {
                 selection = groups[index]
                 deleting = true
             }
-        }
-        .overlay {
-            if groups.isEmpty {
-                ContentUnavailableView("No Custom Lists", systemImage: "list.bullet",
-                                       description: Text("Create a list from the home screen."))
-            }
+            Button("New List") { creatingList = true }
+                .tint(.blue)
         }
         .navigationTitle("Manage Lists")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { if !groups.isEmpty { EditButton() } }
+        .sheet(isPresented: $creatingList) {
+            NavigationStack { CustomListEditor() }
+        }
         .sheet(item: $editingGroup) { group in
             NavigationStack { CustomListEditor(group: group) }
         }
