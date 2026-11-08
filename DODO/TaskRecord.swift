@@ -81,6 +81,13 @@ final class TaskGroup {
         [SortDescriptor(\TaskGroup.position), SortDescriptor(\TaskGroup.createdAt)]
     }
 
+    func deleteKeepingTasks(in context: ModelContext) throws {
+        let id = persistentModelID
+        let members = FetchDescriptor<TaskRecord>(predicate: #Predicate { $0.group?.persistentModelID == id })
+        for task in try context.fetch(members) { task.group = nil }
+        context.delete(self)
+    }
+
     init(name: String, position: Int = 0) {
         self.name = name
         self.position = position

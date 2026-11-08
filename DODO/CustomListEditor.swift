@@ -42,7 +42,11 @@ struct CustomListEditor: View {
     @State private var icon: ListCardIcon
     @State private var error: String?
 
-    init(group: TaskGroup? = nil) {
+    @State private var confirmingDelete = false
+    let onDelete: () -> Void
+
+    init(group: TaskGroup? = nil, onDelete: @escaping () -> Void = {}) {
+        self.onDelete = onDelete
         self.group = group
         _name = State(initialValue: group?.name ?? "")
         _color = State(initialValue: group?.cardColor ?? .indigo)
@@ -114,6 +118,26 @@ struct CustomListEditor: View {
                         .accessibilityLabel(String(describing: option).capitalized)
                         .accessibilityAddTraits(icon == option ? .isSelected : [])
                     }
+                }
+            }
+            if let group {
+                Section {
+                    Button("Delete List", role: .destructive) { confirmingDelete = true }
+                        .confirmationDialog("Delete this list?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                            Button("Delete List", role: .destructive) {
+                                do {
+                                    try group.deleteKeepingTasks(in: context)
+                                    try context.save()
+                                    dismiss()
+                                    onDelete()
+                                } catch {
+                                    context.rollback()
+                                    self.error = error.localizedDescription
+                                }
+                            }
+                        } message: {
+                            Text("Deleting this list keeps its tasks.")
+                        }
                 }
             }
         }

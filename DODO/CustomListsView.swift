@@ -54,12 +54,7 @@ struct CustomListsView: View {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
                 guard let group = selection else { return }
-                save {
-                    let id = group.persistentModelID
-                    let members = FetchDescriptor<TaskRecord>(predicate: #Predicate { $0.group?.persistentModelID == id })
-                    for task in try context.fetch(members) { task.group = nil }
-                    context.delete(group)
-                }
+                save { try group.deleteKeepingTasks(in: context) }
                 selection = nil
             }
         } message: {

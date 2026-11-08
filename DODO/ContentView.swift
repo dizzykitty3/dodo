@@ -52,7 +52,7 @@ enum TaskList: Hashable, Identifiable {
 }
 
 private enum Panel: Identifiable, Hashable {
-    case search(TaskList), settings, compose(TaskList?), newList
+    case search(TaskList), settings, compose(TaskList?), newList, editList(TaskGroup)
 
     var isSearch: Bool {
         if case .search = self { return true }
@@ -93,9 +93,10 @@ struct ContentView: View {
     @State private var toastMessage = ""
     @State private var toastID: UUID?
     @State private var query = ""
+    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: 12) {
                     card(.urgent)
@@ -133,7 +134,13 @@ struct ContentView: View {
                     .navigationTitle(list.title)
                     .toolbar(.visible, for: .navigationBar)
                     .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) { searchButton(from: list) }
+                        ToolbarItemGroup(placement: .topBarTrailing) {
+                            searchButton(from: list)
+                            if let group = list.group {
+                                Button("Edit List", systemImage: "pencil") { panel = .editList(group) }
+                                    .labelStyle(.iconOnly)
+                            }
+                        }
                         if list.canCreateTask { composeToolbar(from: list) }
                     }
             }
@@ -171,6 +178,8 @@ struct ContentView: View {
                             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search tasks")
                     case .newList:
                         CustomListEditor()
+                    case .editList(let group):
+                        CustomListEditor(group: group) { path = NavigationPath() }
                     case .settings:
                         SettingsView(previewLimit: $todayPreviewLimit, urgentPreviewLimit: $urgentPreviewLimit,
                                      hideUndatedFromTodayPreview: $hideUndatedFromTodayPreview,
