@@ -265,6 +265,33 @@ struct ContentView: View {
         .overlay { if matches.isEmpty { ContentUnavailableView.search(text: query) } }
     }
 
+    @ViewBuilder
+    private func scheduledSections(_ records: [TaskRecord], today: Date) -> some View {
+        let calendar = Calendar.autoupdatingCurrent
+        let start = calendar.startOfDay(for: today)
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: start),
+           let week = calendar.dateInterval(of: .weekOfYear, for: start),
+           let followingWeek = calendar.dateInterval(of: .weekOfYear, for: week.end) {
+            let todayKey = start.formatted(TaskRecord.dayFormat)
+            let tomorrowKey = tomorrow.formatted(TaskRecord.dayFormat)
+            let nextWeekKey = week.end.formatted(TaskRecord.dayFormat)
+            let laterKey = followingWeek.end.formatted(TaskRecord.dayFormat)
+            let sorted = records.sorted { ($0.dueDay ?? "") < ($1.dueDay ?? "") }
+            let buckets = Dictionary(grouping: sorted) { task in
+                let day = task.dueDay ?? ""
+                if day < todayKey { return "Overdue" }
+                if day == todayKey { return "Today" }
+                if day == tomorrowKey { return "Tomorrow" }
+                if day < nextWeekKey { return "This Week" }
+                if day < laterKey { return "Next Week" }
+                return "Later"
+            }
+            ForEach(["Overdue", "Today", "Tomorrow", "This Week", "Next Week", "Later"], id: \.self) { title in
+                daySection(title, buckets[title] ?? [])
+            }
+        }
+    }
+
     private func taskRows(in list: TaskList) -> some View {
         let records = items(list, includePending: true)
         return List {
@@ -274,7 +301,7 @@ struct ContentView: View {
                 daySection("Today", records.filter { $0.dueDay == today })
                 daySection("No Date", records.filter { $0.dueDay == nil })
             } else if list == .scheduled && sortScheduled {
-                rows(records.sorted { ($0.dueDay ?? "") < ($1.dueDay ?? "") }, showsCheckbox: true)
+                scheduledSections(records, today: .now)
             } else if list == .completed && sortCompleted {
                 rows(records.sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }, showsCheckbox: true)
             } else {
