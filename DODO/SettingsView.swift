@@ -21,7 +21,7 @@ struct SettingsView: View {
             } header: {
                 Text("List Sorting")
             } footer: {
-                Text("Other lists show newly created tasks first by default.")
+                Text("Lists show newly created tasks first by default.")
             }
 
             Section("Custom Lists") {
