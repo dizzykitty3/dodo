@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Binding var sortScheduled: Bool
     @Binding var sortCompleted: Bool
     @AppStorage("completedCleanupInterval") private var cleanupInterval = CleanupInterval.never
+    @AppStorage("trashRetention") private var trashRetention = TrashRetention.sevenDays
     var dateBadge = DateBadgePreferences()
     let completedCount: Int
 
@@ -48,7 +49,7 @@ struct SettingsView: View {
             }
 
             Section {
-                Picker("Auto-delete", selection: $cleanupInterval) {
+                Picker("Auto Clear", selection: $cleanupInterval) {
                     Text("Never").tag(CleanupInterval.never)
                     Text("After 1 day").tag(CleanupInterval.oneDay)
                     Text("After 7 days").tag(CleanupInterval.sevenDays)
@@ -56,7 +57,20 @@ struct SettingsView: View {
             } header: {
                 Text("Completed Tasks")
             } footer: {
-                Text("Completed tasks are permanently deleted after the selected time. Future repeat occurrences are kept.")
+                Text("Move tasks to Recently Deleted after the selected time has passed since completion. Future repeat occurrences are kept.")
+            }
+
+            Section {
+                Picker("Auto Delete", selection: $trashRetention) {
+                    Text("Never").tag(TrashRetention.never)
+                    Text("After 1 day").tag(TrashRetention.oneDay)
+                    Text("After 7 days").tag(TrashRetention.sevenDays)
+                    Text("After 1 month").tag(TrashRetention.oneMonth)
+                }
+            } header: {
+                Text("Recently Deleted")
+            } footer: {
+                Text("Permanently delete tasks after the selected time has passed since they entered Recently Deleted.")
             }
 
             Section("Stats & About") {

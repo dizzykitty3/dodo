@@ -9,6 +9,29 @@ enum CleanupInterval: Int, CaseIterable {
     }
 }
 
+enum TrashRetention: Int {
+    case never = 0, oneDay = 1, sevenDays = 7, oneMonth = 30
+
+    func deadline(for deletion: Date) -> Date? {
+        switch self {
+        case .never: nil
+        case .oneMonth: Calendar(identifier: .gregorian).date(byAdding: .month, value: 1, to: deletion)
+        case .oneDay, .sevenDays: deletion.addingTimeInterval(Double(rawValue) * 86_400)
+        }
+    }
+}
+
+struct CleanupPolicy: Equatable {
+    var clear: CleanupInterval
+    var delete: TrashRetention
+
+    func deadline(for record: TaskRecord) -> Date? {
+        if let deletion = record.deletedAt { return delete.deadline(for: deletion) }
+        guard let completion = record.completedAt, completion != record.restoredCompletion else { return nil }
+        return clear.deadline(for: completion)
+    }
+}
+
 @Model
 final class CompletionArchive {
     var count: Int
@@ -17,15 +40,11 @@ final class CompletionArchive {
 
 @MainActor
 enum CompletedTaskCleanup {
-    static func purge(_ records: [TaskRecord], interval: CleanupInterval, now: Date, context: ModelContext) throws {
-        guard interval != .never else { return }
-        let expired = records.filter {
-            guard let completed = $0.completedAt, let deadline = interval.deadline(for: completed) else { return false }
-            return deadline <= now
-        }
+    static func apply(_ records: [TaskRecord], policy: CleanupPolicy, now: Date, context: ModelContext) throws {
+        let expired = records.filter { policy.deadline(for: $0).map { $0 <= now } ?? false }
         guard !expired.isEmpty else { return }
         do {
-            let count = expired.filter(\.countedCompletion).count
+            let count = expired.filter { $0.deletedAt != nil && $0.countedCompletion }.count
             if count > 0 {
                 if let archive = try context.fetch(FetchDescriptor<CompletionArchive>()).first {
                     archive.count += count
@@ -35,8 +54,12 @@ enum CompletedTaskCleanup {
             }
             for record in expired {
                 // Older stores may contain completed repeats without a successor.
-                if record.deletedAt == nil { scheduleNext(after: record, context: context) }
-                context.delete(record)
+                if record.deletedAt == nil {
+                    scheduleNext(after: record, context: context)
+                    record.deletedAt = now
+                } else {
+                    context.delete(record)
+                }
             }
             try context.save()
         } catch {

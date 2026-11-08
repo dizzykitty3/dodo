@@ -64,11 +64,18 @@ private enum Panel: Identifiable, Hashable {
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("completedCleanupInterval") private var cleanupInterval = CleanupInterval.never
+    @AppStorage("trashRetention") private var trashRetention = TrashRetention.sevenDays
     @Query private var archives: [CompletionArchive]
 
-    private var cleanupDeadline: Date? {
-        guard scenePhase == .active, cleanupInterval != .never else { return nil }
-        return tasks.compactMap { $0.completedAt }.min().flatMap { cleanupInterval.deadline(for: $0) }
+    private struct CleanupSchedule: Equatable {
+        let policy: CleanupPolicy
+        let deadline: Date?
+    }
+
+    private var cleanupSchedule: CleanupSchedule {
+        let policy = CleanupPolicy(clear: cleanupInterval, delete: trashRetention)
+        let deadline = scenePhase == .active ? tasks.compactMap { policy.deadline(for: $0) }.min() : nil
+        return CleanupSchedule(policy: policy, deadline: deadline)
     }
 
     @AppStorage("todayPreviewLimit") private var todayPreviewLimit = 5
@@ -135,12 +142,13 @@ struct ContentView: View {
         .alert("Couldn’t save changes", isPresented: Binding(get: { storageError != nil }, set: { if !$0 { storageError = nil } })) {
             Button("OK") { storageError = nil }
         } message: { Text(storageError ?? "") }
-        .task(id: cleanupDeadline) {
-            guard let deadline = cleanupDeadline else { return }
+        .task(id: cleanupSchedule) {
+            let schedule = cleanupSchedule
+            guard let deadline = schedule.deadline else { return }
             do {
                 if deadline > .now { try await Task.sleep(for: .seconds(deadline.timeIntervalSinceNow)) }
                 try Task.checkCancellation()
-                try CompletedTaskCleanup.purge(tasks, interval: cleanupInterval, now: .now, context: context)
+                try CompletedTaskCleanup.apply(tasks, policy: schedule.policy, now: .now, context: context)
             } catch is CancellationError {
                 return
             } catch {
@@ -274,7 +282,7 @@ struct ContentView: View {
                                            description: Text("Tasks you complete appear here."))
                 } else {
                     ContentUnavailableView("No Recently Deleted Tasks", systemImage: list.symbol,
-                                           description: Text("Tasks you delete appear here until you restore them."))
+                                           description: Text("Tasks you delete appear here before permanent deletion."))
                 }
             }
         }
@@ -293,6 +301,7 @@ struct ContentView: View {
                     TaskBadges(record: record)
                     Spacer()
                     Button("Restore") {
+                        record.restoredCompletion = record.completedAt
                         record.deletedAt = nil
                         do { try context.save(); showToast("Task restored") }
                         catch { context.rollback(); storageError = error.localizedDescription }

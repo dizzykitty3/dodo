@@ -25,6 +25,7 @@ final class TaskRecord {
     var occurrenceKey: UUID?
     var successorKey: UUID?
     var deletedAt: Date?
+    var restoredCompletion: Date?
     var countedCompletion = false
     var group: TaskGroup?
     var subtasks: [Subtask] = []

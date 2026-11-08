@@ -63,11 +63,21 @@ import Testing
     context.insert(recent)
     try context.save()
     for interval in [CleanupInterval.never, .sevenDays] {
-        try CompletedTaskCleanup.purge([task, recent], interval: interval, now: now, context: context)
+        try CompletedTaskCleanup.apply([task, recent], policy: CleanupPolicy(clear: interval, delete: .sevenDays), now: now, context: context)
         #expect(try context.fetchCount(FetchDescriptor<TaskRecord>()) == 2)
     }
     CompletedTaskCleanup.scheduleNext(after: task, context: context)
-    try CompletedTaskCleanup.purge([task, recent], interval: .oneDay, now: now, context: context)
+    try CompletedTaskCleanup.apply([task, recent], policy: CleanupPolicy(clear: .oneDay, delete: .sevenDays), now: now, context: context)
+    #expect(task.deletedAt == now)
+    #expect(recent.deletedAt == nil)
+    #expect(try context.fetchCount(FetchDescriptor<TaskRecord>()) == 3)
+    for (retention, elapsed) in [(TrashRetention.never, 60 * 86_400), (.sevenDays, 7 * 86_400 - 1)] {
+        try CompletedTaskCleanup.apply([task], policy: CleanupPolicy(clear: .never, delete: retention),
+                                       now: now.addingTimeInterval(Double(elapsed)), context: context)
+        #expect(try context.fetchCount(FetchDescriptor<TaskRecord>()) == 3)
+    }
+    try CompletedTaskCleanup.apply([task], policy: CleanupPolicy(clear: .never, delete: .sevenDays),
+                                   now: now.addingTimeInterval(7 * 86_400), context: context)
     let remaining = try context.fetch(FetchDescriptor<TaskRecord>())
     #expect(remaining.count == 2)
     let next = try #require(remaining.first { $0.title == "Weekly review" })
