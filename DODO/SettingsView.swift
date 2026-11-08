@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @Binding var previewLimit: Int
     @Binding var urgentPreviewLimit: Int
+    @Binding var hideUndatedFromTodayPreview: Bool
     @Binding var sortScheduled: Bool
     @Binding var sortCompleted: Bool
     @AppStorage("completedCleanupInterval") private var cleanupInterval = CleanupInterval.never
@@ -12,8 +13,11 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            previewSection("Urgent Card", limit: $urgentPreviewLimit)
-            previewSection("Today Card", limit: $previewLimit)
+            Section("Urgent Card") { previewLimitPicker($urgentPreviewLimit) }
+            Section("Today Card") {
+                previewLimitPicker($previewLimit)
+                Toggle("Hide Tasks Without a Date", isOn: $hideUndatedFromTodayPreview)
+            }
 
             Section {
                 Toggle("Sort Scheduled by Due Date", isOn: $sortScheduled)
@@ -86,12 +90,10 @@ struct SettingsView: View {
         .navigationTitle("Settings")
     }
 
-    private func previewSection(_ title: String, limit: Binding<Int>) -> some View {
-        Section(title) {
-            Picker("Task Preview Limit", selection: limit) {
-                ForEach(0...5, id: \.self) { Text($0.formatted()).tag($0) }
-                Text("Unlimited").tag(-1)
-            }
+    private func previewLimitPicker(_ limit: Binding<Int>) -> some View {
+        Picker("Task Preview Limit", selection: limit) {
+            ForEach(0...5, id: \.self) { Text($0.formatted()).tag($0) }
+            Text("Unlimited").tag(-1)
         }
     }
 

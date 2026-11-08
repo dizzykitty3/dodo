@@ -78,6 +78,7 @@ struct ContentView: View {
         return CleanupSchedule(policy: policy, deadline: deadline)
     }
 
+    @AppStorage("hideUndatedFromTodayPreview") private var hideUndatedFromTodayPreview = false
     @AppStorage("todayPreviewLimit") private var todayPreviewLimit = 5
     @Query(sort: \TaskRecord.createdAt, order: .reverse) private var tasks: [TaskRecord]
     @AppStorage("urgentPreviewLimit") private var urgentPreviewLimit = 5
@@ -172,6 +173,7 @@ struct ContentView: View {
                         CustomListEditor()
                     case .settings:
                         SettingsView(previewLimit: $todayPreviewLimit, urgentPreviewLimit: $urgentPreviewLimit,
+                                     hideUndatedFromTodayPreview: $hideUndatedFromTodayPreview,
                                      sortScheduled: $sortScheduled, sortCompleted: $sortCompleted,
                                      completedCount: archives.reduce(0) { $0 + $1.count } + tasks.filter(\.countedCompletion).count)
                     case .compose(let composeSource):
@@ -380,7 +382,8 @@ struct ContentView: View {
                     Text("\(entries.count)").font(.title.bold()).monospacedDigit()
                 }
                 if list.hasPreview {
-                    ForEach(entries.prefix(limit == -1 ? entries.count : max(0, limit))) { task in
+                    let preview = list == .today && hideUndatedFromTodayPreview ? entries.filter { $0.dueDay != nil } : entries
+                    ForEach(preview.prefix(limit == -1 ? entries.count : max(0, limit))) { task in
                         Divider().overlay(.white.opacity(0.25))
                         HStack(spacing: 10) {
                             Image(systemName: "circle").foregroundStyle(.white.opacity(0.7))
