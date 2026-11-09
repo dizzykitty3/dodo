@@ -2,9 +2,9 @@ import SwiftUI
 import SwiftData
 
 enum TaskList: Hashable, Identifiable {
-    case today, urgent, completed, scheduled, all, deleted, custom(TaskGroup)
+    case today, urgent, completed, scheduled, all, inProgress, deleted, custom(TaskGroup)
 
-    static let builtIns: [TaskList] = [.urgent, .today, .scheduled, .all, .completed, .deleted]
+    static let builtIns: [TaskList] = [.urgent, .today, .scheduled, .all, .inProgress, .completed, .deleted]
 
     var title: String {
         switch self {
@@ -13,6 +13,7 @@ enum TaskList: Hashable, Identifiable {
         case .completed: "Completed"
         case .scheduled: "Scheduled"
         case .all: "All Tasks"
+        case .inProgress: "In Progress"
         case .deleted: "Recently Deleted"
         case .custom(let group): group.name
         }
@@ -22,13 +23,14 @@ enum TaskList: Hashable, Identifiable {
         return nil
     }
     var hasPreview: Bool { self == .today || self == .urgent }
-    var isCompact: Bool { self == .all || self == .completed || self == .deleted }
+    var isCompact: Bool { self == .all || self == .inProgress || self == .completed || self == .deleted }
 
     var id: Self { self }
     var color: Color {
         switch self {
         case .deleted: Color.gray
         case .custom(let group): group.cardColor.color
+        case .inProgress: Color(red: 0.30, green: 0.49, blue: 0.48)
         case .all: Color(red: 0.37, green: 0.39, blue: 0.44)
         case .today: Color(red: 0.35, green: 0.56, blue: 0.72)
         case .urgent: Color(red: 0.73, green: 0.39, blue: 0.54)
@@ -43,6 +45,7 @@ enum TaskList: Hashable, Identifiable {
         case .deleted: "trash"
         case .custom(let group): group.cardIcon.rawValue
         case .all: "tray.full.fill"
+        case .inProgress: "circle.lefthalf.filled"
         case .today: "sun.max.fill"
         case .urgent: "star.fill"
         case .completed: "checkmark"
@@ -106,6 +109,7 @@ struct ContentView: View {
                         ForEach(groups) { card(.custom($0)) }
                     }
                     card(.all)
+                    card(.inProgress)
                     card(.completed)
                     card(.deleted)
                 }
@@ -394,7 +398,7 @@ struct ContentView: View {
             if list == .completed { return task.completedAt != nil }
             guard task.completedAt == nil || (includePending && pendingRemoval[task.persistentModelID] == task.completedAt) else { return false }
             switch list {
-            case .all: return true
+            case .all, .inProgress: return true
             case .today: return task.dueDay.map { $0 <= today } ?? true
             case .urgent: return task.isUrgent
             case .scheduled: return task.dueDay != nil
