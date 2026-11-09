@@ -107,6 +107,7 @@ struct ContentView: View {
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())], spacing: 12) {
                         card(.scheduled)
                         ForEach(groups) { card(.custom($0)) }
+                        newListCard
                     }
                     card(.all)
                     card(.inProgress)
@@ -123,10 +124,6 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { panel = .newList } label: {
-                        Image(systemName: "text.badge.plus")
-                    }
-                    .accessibilityLabel("New List")
                     searchButton(from: .all)
                     Button("Settings", systemImage: "gearshape") { panel = .settings }
                         .labelStyle(.iconOnly)
@@ -427,6 +424,23 @@ struct ContentView: View {
             case .completed, .deleted: return false
             }
         }
+    }
+
+    private var newListCard: some View {
+        Button { panel = .newList } label: {
+            VStack(alignment: .leading, spacing: 14) {
+                Image(systemName: "plus")
+                    .font(.title.bold())
+                    .accessibilityHidden(true)
+                Text("New List").font(.headline)
+            }
+            .foregroundStyle(.secondary)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22))
+            .contentShape(RoundedRectangle(cornerRadius: 22))
+        }
+        .buttonStyle(.plain)
     }
 
     private func card(_ list: TaskList) -> some View {
