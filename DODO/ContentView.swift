@@ -290,10 +290,26 @@ struct ContentView: View {
                 if day < laterKey { return "Next Week" }
                 return "Later"
             }
-            ForEach(["Overdue", "Today", "Tomorrow", "This Week", "Next Week", "Later"], id: \.self) { title in
+            let visible = ["Overdue", "Today", "Tomorrow", "This Week", "Next Week", "Later"].filter { buckets[$0] != nil }
+            ForEach(visible, id: \.self) { title in
                 daySection(title, buckets[title] ?? [])
+                if title == "Today" && title != visible.last { dateSectionDivider }
             }
         }
+    }
+
+    private var dateSectionDivider: some View {
+        Section {
+            Circle()
+                .frame(width: 18, height: 18)
+                .foregroundStyle(.quaternary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .accessibilityHidden(true)
+        }
+        .listSectionMargins(.vertical, 0)
     }
 
     private func taskRows(in list: TaskList) -> some View {
@@ -306,17 +322,7 @@ struct ContentView: View {
                 daySection("Overdue", records.filter { $0.dueDay.map { $0 < today } ?? false })
                 daySection("Today", dueToday)
                 if !dueToday.isEmpty && !undated.isEmpty {
-                    Section {
-                        Circle()
-                            .frame(width: 18, height: 18)
-                            .foregroundStyle(.quaternary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .listRowInsets(EdgeInsets())
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .accessibilityHidden(true)
-                    }
-                    .listSectionMargins(.vertical, 0)
+                    dateSectionDivider
                 }
                 daySection("No Date", undated)
             } else if list == .scheduled && sortScheduled {
