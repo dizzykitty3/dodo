@@ -509,7 +509,7 @@ private struct CompletionRow: View {
                         TaskEditor(task: record, onDelete: onDelete)
                     } label: {
                         HStack {
-                            TaskTitle(title: record.title).fontWeight(record.subtasks.isEmpty ? .regular : .semibold).strikethrough(completed)
+                            TaskTitle(title: record.title).strikethrough(completed)
                             TaskBadges(record: record)
                         }
                         .foregroundStyle(completed ? .secondary : .primary)
