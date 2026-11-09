@@ -301,9 +301,24 @@ struct ContentView: View {
         return List {
             if list == .today {
                 let today = Date.now.formatted(TaskRecord.dayFormat)
+                let dueToday = records.filter { $0.dueDay == today }
+                let undated = records.filter { $0.dueDay == nil }
                 daySection("Overdue", records.filter { $0.dueDay.map { $0 < today } ?? false })
-                daySection("Today", records.filter { $0.dueDay == today })
-                daySection("No Date", records.filter { $0.dueDay == nil })
+                daySection("Today", dueToday)
+                if !dueToday.isEmpty && !undated.isEmpty {
+                    Section {
+                        Circle()
+                            .frame(width: 18, height: 18)
+                            .foregroundStyle(.quaternary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .accessibilityHidden(true)
+                    }
+                    .listSectionMargins(.vertical, 0)
+                }
+                daySection("No Date", undated)
             } else if list == .scheduled && sortScheduled {
                 scheduledSections(records, today: .now)
             } else if list == .completed && sortCompleted {
@@ -445,6 +460,8 @@ struct ContentView: View {
     }
 }
 
+private let taskCheckboxWidth: CGFloat = 44
+
 private struct CompletionRow: View {
     let record: TaskRecord
     let onDelete: () -> Void
@@ -461,7 +478,7 @@ private struct CompletionRow: View {
                     } label: {
                         Image(systemName: completed ? "checkmark.circle.fill" : record.subtasks.contains(where: \.isComplete) ? "circle.lefthalf.filled" : "circle")
                             .font(.title3)
-                            .frame(width: 44, height: 44)
+                            .frame(width: taskCheckboxWidth, height: 44)
                     }
                     .buttonStyle(.borderless)
                     .disabled(!record.subtasks.isEmpty)
