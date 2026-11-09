@@ -490,6 +490,7 @@ private struct CompletionRow: View {
 
     var body: some View {
         let completed = record.completedAt != nil
+        let overdue = !completed && (record.dueDay.map { $0 < Date.now.formatted(TaskRecord.dayFormat) } ?? false)
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: record.link == nil && record.group == nil ? .center : .top, spacing: 6) {
                 if let toggle {
@@ -498,6 +499,7 @@ private struct CompletionRow: View {
                     } label: {
                         Image(systemName: completed ? "checkmark.circle.fill" : record.subtasks.contains(where: \.isComplete) ? "circle.lefthalf.filled" : "circle")
                             .font(.title3)
+                            .foregroundStyle(record.isUrgent || overdue ? Color.red : Color.accentColor)
                             .frame(width: taskCheckboxWidth, height: 44)
                     }
                     .buttonStyle(.borderless)
