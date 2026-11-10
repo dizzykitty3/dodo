@@ -352,6 +352,7 @@ struct ContentView: View {
                 rows(records, showsCheckbox: true)
             }
         }
+        .environment(\.showsTaskListBadge, list.group == nil)
         .overlay {
             if records.isEmpty && (list.group?.sections.isEmpty ?? true) {
                 if list.canCreateTask {
@@ -504,7 +505,12 @@ struct ContentView: View {
 
 private let taskCheckboxWidth: CGFloat = 44
 
+private extension EnvironmentValues {
+    @Entry var showsTaskListBadge = true
+}
+
 private struct CompletionRow: View {
+    @Environment(\.showsTaskListBadge) private var showsTaskListBadge
     private var listBadge = ListBadgePreferences()
     let record: TaskRecord
     let onDelete: () -> Void
@@ -513,7 +519,7 @@ private struct CompletionRow: View {
 
     var body: some View {
         let completed = record.completedAt != nil
-        let badgeTitle = listBadge.title(for: record)
+        let badgeTitle = showsTaskListBadge ? listBadge.title(for: record) : nil
         let overdue = !completed && (record.dueDay.map { $0 < Date.now.formatted(TaskRecord.dayFormat) } ?? false)
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: record.link == nil && badgeTitle == nil ? .center : .top, spacing: 6) {
