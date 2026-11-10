@@ -88,6 +88,21 @@ final class TaskGroup {
         [SortDescriptor(\TaskGroup.position), SortDescriptor(\TaskGroup.createdAt)]
     }
 
+    func applySectionEdits(_ draft: [TaskListSection], originalIDs: Set<UUID>, in context: ModelContext) throws {
+        let currentIDs = Set(sections.map(\.id))
+        let removed = originalIDs.subtracting(draft.map(\.id))
+        let concurrentAdditions = sections.filter { !originalIDs.contains($0.id) }
+        let ordered = draft.filter { !originalIDs.contains($0.id) || currentIDs.contains($0.id) }
+        if !removed.isEmpty {
+            let id = persistentModelID
+            let members = FetchDescriptor<TaskRecord>(predicate: #Predicate { $0.group?.persistentModelID == id })
+            for task in try context.fetch(members) {
+                if let sectionID = task.sectionID, removed.contains(sectionID) { task.sectionID = nil }
+            }
+        }
+        sections = ordered + concurrentAdditions
+    }
+
     func deleteKeepingTasks(in context: ModelContext) throws {
         let id = persistentModelID
         let members = FetchDescriptor<TaskRecord>(predicate: #Predicate { $0.group?.persistentModelID == id })

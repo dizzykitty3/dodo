@@ -42,17 +42,24 @@ struct CustomListEditor: View {
     @State private var icon: ListCardIcon
     @State private var error: String?
 
+    @State private var sections: [TaskListSection]
+    @State private var originalSectionIDs: Set<UUID>
+    @State private var addingSection = false
+    @State private var sectionName = ""
     @State private var confirmingDelete = false
     let onDelete: () -> Void
 
     init(group: TaskGroup? = nil, onDelete: @escaping () -> Void = {}) {
         self.onDelete = onDelete
         self.group = group
+        _sections = State(initialValue: group?.sections ?? [])
+        _originalSectionIDs = State(initialValue: Set(group?.sections.map(\.id) ?? []))
         _name = State(initialValue: group?.name ?? "")
         _color = State(initialValue: group?.cardColor ?? .indigo)
         _icon = State(initialValue: group?.cardIcon ?? .list)
     }
 
+    private var trimmedSectionName: String { sectionName.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var duplicateName: Bool {
         func matches(_ other: String) -> Bool {
@@ -120,6 +127,27 @@ struct CustomListEditor: View {
                     }
                 }
             }
+            Section {
+                ForEach(sections) { section in Text(section.name) }
+                    .onMove { sections.move(fromOffsets: $0, toOffset: $1) }
+                    .onDelete { sections.remove(atOffsets: $0) }
+                Button("New Group") { sectionName = ""; addingSection = true }
+                    .tint(.blue)
+                    .alert("New Group", isPresented: $addingSection) {
+                        TextField("Group name", text: $sectionName)
+                        Button("Cancel", role: .cancel) {}
+                        Button("Add") {
+                            sections.append(TaskListSection(name: trimmedSectionName))
+                        }
+                        .disabled(trimmedSectionName.isEmpty || sections.contains {
+                            $0.name.caseInsensitiveCompare(trimmedSectionName) == .orderedSame
+                        })
+                    }
+            } header: {
+                Text("Groups")
+            } footer: {
+                if !sections.isEmpty { Text("Drag to reorder or swipe to delete. Tasks in a deleted group stay in this list under None.") }
+            }
             if let group {
                 Section {
                     Button("Delete List", role: .destructive) { confirmingDelete = true }
@@ -162,6 +190,7 @@ struct CustomListEditor: View {
         list.colorName = color.rawValue
         list.symbolName = icon.rawValue
         do {
+            try list.applySectionEdits(sections, originalIDs: originalSectionIDs, in: context)
             try context.save()
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             dismiss()

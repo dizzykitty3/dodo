@@ -147,3 +147,28 @@ import Testing
         #expect(successor.dueDay == expected && successor.repeatWeekdays == days && successor.repeatRule == rule.rawValue)
     }
 }
+
+@MainActor
+@Test func editingGroupsReordersSurvivorsAndUngroupsOnlyAffectedTasks() throws {
+    let store = try ModelContainer(for: TaskRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    let context = store.mainContext
+    let list = TaskGroup(name: "Work")
+    let sections = ["Inbox", "Planning", "Later"].map { TaskListSection(name: $0) }
+    list.sections = sections
+    context.insert(list)
+    let tasks = sections.map { section in
+        let task = TaskRecord(title: section.name)
+        task.group = list
+        task.sectionID = section.id
+        context.insert(task)
+        return task
+    }
+    tasks[0].completedAt = .now
+    try context.save()
+    try list.applySectionEdits([sections[2], sections[1]], originalIDs: Set(sections.map(\.id)), in: context)
+    try context.save()
+    #expect(list.sections.map(\.id) == [sections[2].id, sections[1].id])
+    #expect(try context.fetchCount(FetchDescriptor<TaskRecord>()) == 3)
+    #expect(tasks[0].sectionID == nil && tasks[0].group == list && tasks[0].completedAt != nil)
+    #expect(tasks[1].sectionID == sections[1].id && tasks[2].sectionID == sections[2].id)
+}
