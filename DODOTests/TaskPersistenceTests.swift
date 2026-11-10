@@ -16,6 +16,12 @@ import Testing
     do {
         let store = try openStore()
         let task = TaskRecord(title: "Weekly review")
+        let list = TaskGroup(name: "Projects")
+        let section = TaskListSection(name: "Planning")
+        list.sections = [section]
+        store.mainContext.insert(list)
+        task.group = list
+        task.sectionID = section.id
         task.link = URL(string: "https://example.com/review")
         task.dueDay = "2026-11-09"
         task.repeatRule = RepeatRule.weekly.rawValue
@@ -31,6 +37,10 @@ import Testing
         #expect(task.dueDay == "2026-11-09" && task.isUrgent && task.repeatDay == 2)
         #expect(task.link?.absoluteString == "https://example.com/review")
         #expect(task.subtasks.first?.isComplete == true)
+        let list = try #require(task.group)
+        let section = try #require(list.sections.first)
+        #expect(section.name == "Planning" && task.sectionID == section.id)
+        try list.deleteKeepingTasks(in: store.mainContext)
         task.link = nil
         task.title = "Review"
         task.subtasks = []
@@ -40,6 +50,7 @@ import Testing
         let store = try openStore()
         let task = try #require(store.mainContext.fetch(FetchDescriptor<TaskRecord>()).first)
         #expect(task.title == "Review" && task.subtasks.isEmpty && task.link == nil)
+        #expect(task.group == nil && task.sectionID == nil)
         store.mainContext.delete(task)
         try store.mainContext.save()
     }

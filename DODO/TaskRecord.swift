@@ -31,6 +31,7 @@ final class TaskRecord {
     var restoredCompletion: Date?
     var countedCompletion = false
     var group: TaskGroup?
+    var sectionID: UUID?
     var subtasks: [Subtask] = []
 
     init(title: String) { self.title = title }
@@ -70,10 +71,16 @@ final class TaskRecord {
     }
 }
 
+struct TaskListSection: Identifiable, Codable {
+    var id = UUID()
+    var name: String
+}
+
 @Model
 final class TaskGroup {
     var name: String
     var createdAt = Date.now
+    var sections: [TaskListSection] = []
     var colorName = "Indigo"
     var symbolName = "list.bullet"
     var position = 0
@@ -84,7 +91,10 @@ final class TaskGroup {
     func deleteKeepingTasks(in context: ModelContext) throws {
         let id = persistentModelID
         let members = FetchDescriptor<TaskRecord>(predicate: #Predicate { $0.group?.persistentModelID == id })
-        for task in try context.fetch(members) { task.group = nil }
+        for task in try context.fetch(members) {
+            task.sectionID = nil
+            task.group = nil
+        }
         context.delete(self)
     }
 

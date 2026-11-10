@@ -142,6 +142,9 @@ struct ContentView: View {
                                     .labelStyle(.iconOnly)
                             }
                         }
+                        if let group = list.group {
+                            ToolbarItem(placement: .bottomBar) { NewTaskGroupButton(list: group) }
+                        }
                         if list.canCreateTask { composeToolbar(from: list) }
                     }
             }
@@ -322,6 +325,18 @@ struct ContentView: View {
                     dateSectionDivider
                 }
                 daySection("No Date", undated)
+            } else if let group = list.group, !group.sections.isEmpty {
+                let grouped = Dictionary(grouping: records, by: \.sectionID)
+                daySection("Ungrouped", grouped[nil] ?? [])
+                ForEach(group.sections) { section in
+                    Section(section.name) {
+                        if let members = grouped[section.id] {
+                            rows(members, showsCheckbox: true)
+                        } else {
+                            Text("No Tasks").foregroundStyle(.secondary)
+                        }
+                    }
+                }
             } else if list == .scheduled && sortScheduled {
                 scheduledSections(records, today: .now)
             } else if list == .completed && sortCompleted {
@@ -331,7 +346,7 @@ struct ContentView: View {
             }
         }
         .overlay {
-            if records.isEmpty {
+            if records.isEmpty && (list.group?.sections.isEmpty ?? true) {
                 if list.canCreateTask {
                     ContentUnavailableView("No Tasks", systemImage: list.symbol,
                                            description: Text("Tap the compose button in the bottom-right corner to create a task."))
@@ -612,3 +627,39 @@ private struct TaskBadges: View {
 }
 
 #Preview { ContentView().modelContainer(for: [TaskRecord.self, CompletionArchive.self], inMemory: true) }
+
+private struct NewTaskGroupButton: View {
+    @Environment(\.modelContext) private var context
+    let list: TaskGroup
+    @State private var name = ""
+    @State private var creating = false
+    @State private var error: String?
+
+    private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        Button("New Group", systemImage: "folder.badge.plus") {
+            name = ""
+            creating = true
+        }
+        .labelStyle(.iconOnly)
+        .alert("New Group", isPresented: $creating) {
+            TextField("Group name", text: $name)
+            Button("Cancel", role: .cancel) {}
+            Button("Create") {
+                guard !trimmedName.isEmpty else { return }
+                guard !list.sections.contains(where: { $0.name.caseInsensitiveCompare(trimmedName) == .orderedSame }) else {
+                    error = "A group with this name already exists in this list."
+                    return
+                }
+                list.sections.append(TaskListSection(name: trimmedName))
+                do { try context.save() }
+                catch { context.rollback(); self.error = error.localizedDescription }
+            }
+            .disabled(trimmedName.isEmpty)
+        }
+        .alert("Couldn’t Create Group", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            Button("OK") {}
+        } message: { Text(error ?? "") }
+    }
+}

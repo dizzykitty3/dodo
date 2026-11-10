@@ -8,6 +8,7 @@ struct TaskEditor: View {
     @Query(sort: TaskGroup.displayOrder) private var groups: [TaskGroup]
     let presetGroup: TaskGroup?
     @State private var group: TaskGroup?
+    @State private var sectionID: UUID?
     let presetToday: Bool
     let presetUrgent: Bool
     @State private var initialDate: Date
@@ -33,6 +34,7 @@ struct TaskEditor: View {
     @State private var errorMessage: String?
 
     init(task: TaskRecord? = nil, presetToday: Bool = false, presetUrgent: Bool = false, presetGroup: TaskGroup? = nil, onDelete: @escaping () -> Void = {}, onCreate: @escaping () -> Void = {}) {
+        _sectionID = State(initialValue: task?.sectionID)
         self.presetGroup = presetGroup
         _group = State(initialValue: task?.group ?? presetGroup)
         self.presetToday = presetToday
@@ -78,6 +80,12 @@ struct TaskEditor: View {
                     Picker("List", selection: $group) {
                         Text("None").tag(nil as TaskGroup?)
                         ForEach(groups) { Text($0.name).tag(Optional($0)) }
+                    }
+                }
+                if let group {
+                    Picker("Group", selection: $sectionID) {
+                        Text("None").tag(nil as UUID?)
+                        ForEach(group.sections) { Text($0.name).tag(Optional($0.id)) }
                     }
                 }
                 Toggle("Urgent", isOn: $urgent)
@@ -141,6 +149,7 @@ struct TaskEditor: View {
                     .foregroundStyle(.red)
             }
         }
+        .onChange(of: group) { sectionID = nil }
         .navigationTitle(task == nil ? "New Task" : "Edit Task")
         .interactiveDismissDisabled(hasNewTaskChanges)
         .toolbar {
@@ -173,7 +182,7 @@ struct TaskEditor: View {
     }
 
     private var hasNewTaskChanges: Bool {
-        task == nil && (!title.isEmpty || !linkText.isEmpty || group != presetGroup || urgent != presetUrgent || hasDate != presetToday || (hasDate && !Calendar.current.isDate(date, inSameDayAs: initialDate)) || rule != .never || !subtasks.isEmpty)
+        task == nil && (!title.isEmpty || !linkText.isEmpty || sectionID != nil || group != presetGroup || urgent != presetUrgent || hasDate != presetToday || (hasDate && !Calendar.current.isDate(date, inSameDayAs: initialDate)) || rule != .never || !subtasks.isEmpty)
     }
 
     private func insertSubtask(at index: Int) {
@@ -215,6 +224,7 @@ struct TaskEditor: View {
         record.repeatWeekdays = rule == .custom ? selectedWeekdays.sorted() : []
         record.repeatDay = rule == .weekly ? weekday : rule == .monthly ? monthDay : nil
         record.group = group
+        record.sectionID = group?.sections.first { $0.id == sectionID }?.id
         record.isUrgent = urgent
         record.subtasks = subtasks.compactMap {
             var subtask = $0

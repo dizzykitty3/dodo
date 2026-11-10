@@ -132,6 +132,7 @@ enum CompletedTaskCleanup {
         next.repeatDay = record.repeatDay
         next.link = record.link
         next.group = record.group
+        next.sectionID = record.sectionID
         next.isUrgent = record.isUrgent
         next.subtasks = record.subtasks.map { Subtask(title: $0.title) }
         context.insert(next)
