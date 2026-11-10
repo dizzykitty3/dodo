@@ -336,12 +336,9 @@ struct ContentView: View {
                 daySection("Ungrouped", grouped[nil] ?? [])
                 ForEach(group.sections) { section in
                     Section(section.name) {
-                        if let members = grouped[section.id] {
-                            rows(members, showsCheckbox: true)
-                        } else {
-                            Button("New Task") { panel = .compose(list, sectionID: section.id) }
-                                .tint(.blue)
-                        }
+                        rows(grouped[section.id] ?? [], showsCheckbox: true)
+                        Button("New Task") { panel = .compose(list, sectionID: section.id) }
+                            .tint(.blue)
                     }
                 }
             } else if list == .scheduled && sortScheduled {
