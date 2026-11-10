@@ -55,7 +55,7 @@ enum TaskList: Hashable, Identifiable {
 }
 
 private enum Panel: Identifiable, Hashable {
-    case search(TaskList), settings, compose(TaskList?), newList, editList(TaskGroup)
+    case search(TaskList), settings, compose(TaskList?, sectionID: UUID? = nil), newList, editList(TaskGroup)
 
     var isSearch: Bool {
         if case .search = self { return true }
@@ -189,9 +189,9 @@ struct ContentView: View {
                                      hideUndatedFromTodayPreview: $hideUndatedFromTodayPreview,
                                      sortScheduled: $sortScheduled, sortCompleted: $sortCompleted,
                                      completedCount: archives.reduce(0) { $0 + $1.count } + tasks.filter(\.countedCompletion).count)
-                    case .compose(let composeSource):
+                    case .compose(let composeSource, let sectionID):
                         TaskEditor(presetToday: composeSource == .today, presetUrgent: composeSource == .urgent,
-                                   presetGroup: composeSource?.group, onCreate: { didCreateTask = true })
+                                   presetGroup: composeSource?.group, presetSectionID: sectionID, onCreate: { didCreateTask = true })
                     }
                 }
                 .toolbar {
@@ -338,7 +338,8 @@ struct ContentView: View {
                         if let members = grouped[section.id] {
                             rows(members, showsCheckbox: true)
                         } else {
-                            Text("No Tasks").foregroundStyle(.secondary)
+                            Button("New Task") { panel = .compose(list, sectionID: section.id) }
+                                .tint(.blue)
                         }
                     }
                 }

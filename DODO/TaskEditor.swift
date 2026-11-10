@@ -7,6 +7,7 @@ struct TaskEditor: View {
     let task: TaskRecord?
     @Query(sort: TaskGroup.displayOrder) private var groups: [TaskGroup]
     let presetGroup: TaskGroup?
+    let presetSectionID: UUID?
     @State private var group: TaskGroup?
     @State private var sectionID: UUID?
     let presetToday: Bool
@@ -33,8 +34,9 @@ struct TaskEditor: View {
     @State private var confirmingDelete = false
     @State private var errorMessage: String?
 
-    init(task: TaskRecord? = nil, presetToday: Bool = false, presetUrgent: Bool = false, presetGroup: TaskGroup? = nil, onDelete: @escaping () -> Void = {}, onCreate: @escaping () -> Void = {}) {
-        _sectionID = State(initialValue: task?.sectionID)
+    init(task: TaskRecord? = nil, presetToday: Bool = false, presetUrgent: Bool = false, presetGroup: TaskGroup? = nil, presetSectionID: UUID? = nil, onDelete: @escaping () -> Void = {}, onCreate: @escaping () -> Void = {}) {
+        self.presetSectionID = presetSectionID
+        _sectionID = State(initialValue: task?.sectionID ?? presetSectionID)
         self.presetGroup = presetGroup
         _group = State(initialValue: task?.group ?? presetGroup)
         self.presetToday = presetToday
@@ -182,7 +184,7 @@ struct TaskEditor: View {
     }
 
     private var hasNewTaskChanges: Bool {
-        task == nil && (!title.isEmpty || !linkText.isEmpty || sectionID != nil || group != presetGroup || urgent != presetUrgent || hasDate != presetToday || (hasDate && !Calendar.current.isDate(date, inSameDayAs: initialDate)) || rule != .never || !subtasks.isEmpty)
+        task == nil && (!title.isEmpty || !linkText.isEmpty || sectionID != presetSectionID || group != presetGroup || urgent != presetUrgent || hasDate != presetToday || (hasDate && !Calendar.current.isDate(date, inSameDayAs: initialDate)) || rule != .never || !subtasks.isEmpty)
     }
 
     private func insertSubtask(at index: Int) {
