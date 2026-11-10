@@ -65,6 +65,7 @@ private enum Panel: Identifiable, Hashable {
 }
 
 struct ContentView: View {
+    private var listBadge = ListBadgePreferences()
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("completedCleanupInterval") private var cleanupInterval = CleanupInterval.never
     @AppStorage("trashRetention") private var trashRetention = TrashRetention.sevenDays
@@ -388,7 +389,7 @@ struct ContentView: View {
                         }
                         .buttonStyle(.glass)
                     }
-                    TaskListDetails(record: record)
+                    TaskListDetails(record: record, badgeTitle: listBadge.title(for: record))
                 }
             } else {
                 CompletionRow(record: record, onDelete: { showToast("Task deleted") },
@@ -504,6 +505,7 @@ struct ContentView: View {
 private let taskCheckboxWidth: CGFloat = 44
 
 private struct CompletionRow: View {
+    private var listBadge = ListBadgePreferences()
     let record: TaskRecord
     let onDelete: () -> Void
     let toggle: ((UUID?) throws -> Void)?
@@ -511,9 +513,10 @@ private struct CompletionRow: View {
 
     var body: some View {
         let completed = record.completedAt != nil
+        let badgeTitle = listBadge.title(for: record)
         let overdue = !completed && (record.dueDay.map { $0 < Date.now.formatted(TaskRecord.dayFormat) } ?? false)
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: record.link == nil && record.group == nil ? .center : .top, spacing: 6) {
+            HStack(alignment: record.link == nil && badgeTitle == nil ? .center : .top, spacing: 6) {
                 if let toggle {
                     Button {
                         do { try toggle(nil) } catch { errorMessage = error.localizedDescription }
@@ -537,8 +540,8 @@ private struct CompletionRow: View {
                         }
                         .foregroundStyle(completed ? .secondary : .primary)
                     }
-                    if record.link != nil || record.group != nil {
-                        TaskListDetails(record: record)
+                    if record.link != nil || badgeTitle != nil {
+                        TaskListDetails(record: record, badgeTitle: badgeTitle)
                     }
                 }
             }
@@ -580,18 +583,14 @@ private struct TaskTitle: View {
 
 private struct TaskListDetails: View {
     let record: TaskRecord
+    let badgeTitle: String?
 
     var body: some View {
-        if record.link != nil || record.group != nil {
+        if record.link != nil || badgeTitle != nil {
             HStack(spacing: 8) {
                 if let url = record.link { TaskLinkButton(url: url) }
-                if let group = record.group {
-                    Text(group.name)
-                        .font(.subheadline)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(.quaternary, in: Capsule())
-                        .accessibilityLabel("List: " + group.name)
+                if let badgeTitle {
+                    ListBadge(title: badgeTitle)
                 }
             }
             .padding(.vertical, 4)

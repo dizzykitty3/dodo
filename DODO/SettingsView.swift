@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Binding var sortCompleted: Bool
     @AppStorage("completedCleanupInterval") private var cleanupInterval = CleanupInterval.never
     @AppStorage("trashRetention") private var trashRetention = TrashRetention.sevenDays
+    var listBadge = ListBadgePreferences()
     var dateBadge = DateBadgePreferences()
     let completedCount: Int
 
@@ -30,6 +31,22 @@ struct SettingsView: View {
 
             Section("Custom Lists") {
                 NavigationLink("Manage Lists") { CustomListsView() }
+            }
+
+            Section("List Badges") {
+                Picker("Content", selection: listBadge.$content) {
+                    ForEach(ListBadgeContent.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                if listBadge.content == .both {
+                    Picker("Separator", selection: listBadge.$separator) {
+                        ForEach(ListBadgeSeparator.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
+                }
+                LabeledContent("Preview") {
+                    if let title = listBadge.title(list: "Work", group: "Planning") {
+                        ListBadge(title: title)
+                    }
+                }
             }
 
             Section("Date Badges") {
