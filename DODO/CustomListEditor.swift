@@ -146,7 +146,7 @@ struct CustomListEditor: View {
             } header: {
                 Text("Groups")
             } footer: {
-                if !sections.isEmpty { Text("Drag to reorder or swipe to delete. Tasks in a deleted group stay in this list under None.") }
+                if !sections.isEmpty { Text("Drag to reorder or swipe to delete. Tasks in a deleted group stay in this list.") }
             }
             if let group {
                 Section {

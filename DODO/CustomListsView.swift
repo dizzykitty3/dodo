@@ -12,34 +12,38 @@ struct CustomListsView: View {
 
     var body: some View {
         List {
-            ForEach(groups) { group in
-                Button {
-                    editingGroup = group
-                } label: {
-                    HStack {
-                        Image(systemName: group.cardIcon.rawValue).foregroundStyle(group.cardColor.color)
-                        Text(group.name)
-                        Spacer()
-                        Image(systemName: "pencil").foregroundStyle(.secondary)
+            Section {
+                ForEach(groups) { group in
+                    Button {
+                        editingGroup = group
+                    } label: {
+                        HStack {
+                            Image(systemName: group.cardIcon.rawValue).foregroundStyle(group.cardColor.color)
+                            Text(group.name)
+                            Spacer()
+                            Image(systemName: "pencil").foregroundStyle(.secondary)
+                        }
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-            }
-            .onMove { offsets, destination in
-                var ordered = groups
-                ordered.move(fromOffsets: offsets, toOffset: destination)
-                save {
-                    for (position, group) in ordered.enumerated() { group.position = position }
+                .onMove { offsets, destination in
+                    var ordered = groups
+                    ordered.move(fromOffsets: offsets, toOffset: destination)
+                    save {
+                        for (position, group) in ordered.enumerated() { group.position = position }
+                    }
                 }
+                .onDelete { offsets in
+                    guard let index = offsets.first else { return }
+                    selection = groups[index]
+                    deleting = true
+                }
+                Button("New List") { creatingList = true }
+                    .tint(.blue)
+            } footer: {
+                if !groups.isEmpty { Text("Drag to reorder or swipe to delete.") }
             }
-            .onDelete { offsets in
-                guard let index = offsets.first else { return }
-                selection = groups[index]
-                deleting = true
-            }
-            Button("New List") { creatingList = true }
-                .tint(.blue)
         }
         .navigationTitle("Manage Lists")
         .navigationBarTitleDisplayMode(.inline)

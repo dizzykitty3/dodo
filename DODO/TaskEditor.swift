@@ -119,7 +119,7 @@ struct TaskEditor: View {
                     }
                 }
             }
-            Section("Subtasks") {
+            Section {
                 ForEach($subtasks) { $subtask in
                     HStack {
                         Button {
@@ -145,6 +145,10 @@ struct TaskEditor: View {
                     insertSubtask(at: subtasks.endIndex)
                 }
                 .tint(.blue)
+            } header: {
+                Text("Subtasks")
+            } footer: {
+                Text("Drag to reorder or swipe to delete. Completing all subtasks automatically completes the parent task.")
             }
             if task != nil {
                 Button("Delete task", role: .destructive) { confirmingDelete = true }
