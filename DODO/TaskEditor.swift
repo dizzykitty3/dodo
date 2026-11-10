@@ -23,7 +23,6 @@ struct TaskEditor: View {
     @State private var date: Date
     @State private var rule: RepeatRule
     @State private var selectedWeekdays: Set<Int>
-    @State private var weekday: Int
     @State private var monthDay: Int
     @State private var urgent: Bool
     @State private var subtasks: [Subtask]
@@ -54,7 +53,6 @@ struct TaskEditor: View {
         _hasDate = State(initialValue: task?.dueDay != nil || presetToday)
         _rule = State(initialValue: rule)
         _selectedWeekdays = State(initialValue: Set(task?.repeatWeekdays ?? []))
-        _weekday = State(initialValue: (rule == .weekly ? task?.repeatDay : nil) ?? calendar.component(.weekday, from: date))
         _monthDay = State(initialValue: (rule == .monthly ? task?.repeatDay : nil) ?? calendar.component(.day, from: date))
         _urgent = State(initialValue: task?.isUrgent ?? presetUrgent)
         _subtasks = State(initialValue: task?.displayedSubtasks ?? [])
@@ -98,11 +96,7 @@ struct TaskEditor: View {
                 Picker("Repeat", selection: $rule) {
                     ForEach(RepeatRule.allCases, id: \.self) { Text($0.rawValue) }
                 }
-                if rule == .weekly {
-                    Picker("On", selection: $weekday) {
-                        ForEach(1...7, id: \.self) { Text(Calendar.current.weekdaySymbols[$0 - 1]).tag($0) }
-                    }
-                } else if rule == .monthly {
+                if rule == .monthly {
                     Stepper("Day of month: \(monthDay)", value: $monthDay, in: 1...31)
                 } else if rule == .custom {
                     ForEach(1...7, id: \.self) { day in
@@ -228,7 +222,7 @@ struct TaskEditor: View {
         record.dueDay = hasDate ? date.formatted(TaskRecord.dayFormat) : nil
         record.repeatRule = rule.rawValue
         record.repeatWeekdays = rule == .custom ? selectedWeekdays.sorted() : []
-        record.repeatDay = rule == .weekly ? weekday : rule == .monthly ? monthDay : nil
+        record.repeatDay = rule == .monthly ? monthDay : nil
         record.group = group
         record.sectionID = group?.sections.first { $0.id == sectionID }?.id
         record.isUrgent = urgent

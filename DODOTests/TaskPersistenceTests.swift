@@ -95,7 +95,7 @@ import Testing
     let remaining = try context.fetch(FetchDescriptor<TaskRecord>())
     #expect(remaining.count == 2)
     let next = try #require(remaining.first { $0.title == "Weekly review" })
-    #expect(next.completedAt == nil && next.repeatDay == 2 && next.subtasks.first?.isComplete == false)
+    #expect(next.completedAt == nil && next.repeatDay == nil && next.subtasks.first?.isComplete == false)
     #expect(try context.fetch(FetchDescriptor<CompletionArchive>()).first?.count == 1)
 }
 
@@ -171,4 +171,21 @@ import Testing
     #expect(try context.fetchCount(FetchDescriptor<TaskRecord>()) == 3)
     #expect(tasks[0].sectionID == nil && tasks[0].group == list && tasks[0].completedAt != nil)
     #expect(tasks[1].sectionID == sections[1].id && tasks[2].sectionID == sections[2].id)
+}
+
+@MainActor
+@Test func weeklyRepeatFollowsDueDateEvenWhenCompletedLate() throws {
+    let store = try ModelContainer(for: TaskRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    for (due, expected) in [("2026-11-10", "2026-11-17"), ("2026-11-11", "2026-11-18")] {
+        let record = TaskRecord(title: "Weekly")
+        record.dueDay = due
+        record.repeatRule = RepeatRule.weekly.rawValue
+        record.repeatDay = 2 // Previously selected Monday.
+        record.completedAt = try TaskRecord.dayFormat.parseStrategy.parse("2026-11-13")
+        store.mainContext.insert(record)
+        CompletedTaskCleanup.scheduleNext(after: record, context: store.mainContext)
+        let key = try #require(record.successorKey)
+        let next = try #require(store.mainContext.fetch(FetchDescriptor<TaskRecord>()).first { $0.occurrenceKey == key })
+        #expect(next.dueDay == expected)
+    }
 }

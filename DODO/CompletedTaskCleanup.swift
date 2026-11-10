@@ -97,7 +97,8 @@ enum CompletedTaskCleanup {
         let calendar = Calendar(identifier: .gregorian)
         let scheduled = record.dueDay.flatMap { try? TaskRecord.dayFormat.parseStrategy.parse($0) }
         let anchor = calendar.startOfDay(for: max(scheduled ?? completion, completion))
-        let weekday = record.repeatDay ?? calendar.component(.weekday, from: scheduled ?? completion)
+        let weekday = scheduled.map { calendar.component(.weekday, from: $0) }
+            ?? record.repeatDay ?? calendar.component(.weekday, from: completion)
         let monthDay = record.repeatDay ?? calendar.component(.day, from: scheduled ?? completion)
         let selectedDays = Set(record.repeatWeekdays.filter { (1...7).contains($0) })
         guard rule != .custom || !selectedDays.isEmpty else { return }
@@ -129,7 +130,7 @@ enum CompletedTaskCleanup {
         next.dueDay = date.formatted(TaskRecord.dayFormat)
         next.repeatRule = record.repeatRule
         next.repeatWeekdays = record.repeatWeekdays
-        next.repeatDay = record.repeatDay
+        next.repeatDay = rule == .monthly ? record.repeatDay : nil
         next.link = record.link
         next.group = record.group
         next.sectionID = record.sectionID
