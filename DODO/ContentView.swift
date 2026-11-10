@@ -290,10 +290,14 @@ struct ContentView: View {
                 if day < laterKey { return "Next Week" }
                 return "Later"
             }
-            let visible = ["Overdue", "Today", "Tomorrow", "This Week", "Next Week", "Later"].filter { buckets[$0] != nil }
-            ForEach(visible, id: \.self) { title in
+            let upcoming = ["Tomorrow", "This Week", "Next Week", "Later"].filter { buckets[$0] != nil }
+            daySection("Overdue", buckets["Overdue"] ?? [])
+            daySection("Today", buckets["Today"] ?? [])
+            if (buckets["Overdue"] != nil || buckets["Today"] != nil) && !upcoming.isEmpty {
+                dateSectionDivider
+            }
+            ForEach(upcoming, id: \.self) { title in
                 daySection(title, buckets[title] ?? [])
-                if title == "Today" && title != visible.last { dateSectionDivider }
             }
         }
     }
@@ -317,11 +321,12 @@ struct ContentView: View {
         return List {
             if list == .today {
                 let today = Date.now.formatted(TaskRecord.dayFormat)
+                let overdue = records.filter { $0.dueDay.map { $0 < today } ?? false }
                 let dueToday = records.filter { $0.dueDay == today }
                 let undated = records.filter { $0.dueDay == nil }
-                daySection("Overdue", records.filter { $0.dueDay.map { $0 < today } ?? false })
+                daySection("Overdue", overdue)
                 daySection("Today", dueToday)
-                if !dueToday.isEmpty && !undated.isEmpty {
+                if (!overdue.isEmpty || !dueToday.isEmpty) && !undated.isEmpty {
                     dateSectionDivider
                 }
                 daySection("No Date", undated)
