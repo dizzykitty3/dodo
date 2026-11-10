@@ -4,6 +4,8 @@ import SwiftUI
 enum ListCardColor: String, CaseIterable {
     case indigo = "Indigo", blue = "Blue", teal = "Teal", green = "Green"
     case rose = "Rose", plum = "Plum", amber = "Amber", slate = "Slate"
+    case brick = "Brick", coral = "Coral", ochre = "Ochre", olive = "Olive"
+    case pine = "Pine", navy = "Navy", violet = "Violet", cocoa = "Cocoa"
 
     var color: Color {
         switch self {
@@ -15,6 +17,14 @@ enum ListCardColor: String, CaseIterable {
         case .plum: Color(red: 0.53, green: 0.36, blue: 0.57)
         case .amber: Color(red: 0.62, green: 0.43, blue: 0.24)
         case .slate: Color(red: 0.36, green: 0.41, blue: 0.48)
+        case .brick: Color(red: 0.57, green: 0.24, blue: 0.23)
+        case .coral: Color(red: 0.70, green: 0.37, blue: 0.29)
+        case .ochre: Color(red: 0.55, green: 0.44, blue: 0.14)
+        case .olive: Color(red: 0.43, green: 0.47, blue: 0.23)
+        case .pine: Color(red: 0.17, green: 0.37, blue: 0.29)
+        case .navy: Color(red: 0.19, green: 0.29, blue: 0.46)
+        case .violet: Color(red: 0.43, green: 0.32, blue: 0.63)
+        case .cocoa: Color(red: 0.46, green: 0.34, blue: 0.29)
         }
     }
 }
@@ -24,6 +34,14 @@ enum ListCardIcon: String, CaseIterable {
     case shopping = "cart.fill", books = "book.fill", travel = "airplane"
     case health = "heart.fill", study = "graduationcap.fill", ideas = "lightbulb.fill"
     case nature = "leaf.fill", music = "music.note", fitness = "figure.walk"
+    case meals = "fork.knife", coffee = "cup.and.saucer.fill", pets = "pawprint.fill"
+    case family = "person.2.fill", gifts = "gift.fill", birthdays = "birthday.cake.fill"
+    case budget = "creditcard.fill", errands = "basket.fill", car = "car.fill"
+    case cycling = "bicycle", places = "mappin.and.ellipse", trips = "suitcase.fill"
+    case photos = "camera.fill", movies = "film.fill", games = "gamecontroller.fill"
+    case art = "paintpalette.fill", projects = "hammer.fill", coding = "laptopcomputer"
+    case mail = "envelope.fill", appointments = "calendar", goals = "target"
+    case running = "figure.run", sleep = "bed.double.fill", medicine = "pills.fill"
 }
 
 extension TaskGroup {
