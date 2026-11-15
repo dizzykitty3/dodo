@@ -63,7 +63,7 @@ struct CustomListEditor: View {
     @State private var sections: [TaskListSection]
     @State private var originalSectionIDs: Set<UUID>
     @State private var addingSection = false
-    @State private var sectionName = ""
+    @State private var editingSection: TaskListSection?
     @State private var confirmingDelete = false
     let onDelete: () -> Void
 
@@ -77,7 +77,10 @@ struct CustomListEditor: View {
         _icon = State(initialValue: group?.cardIcon ?? .list)
     }
 
-    private var trimmedSectionName: String { sectionName.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var hasChanges: Bool {
+        name != (group?.name ?? "") || color != (group?.cardColor ?? .indigo)
+            || icon != (group?.cardIcon ?? .list) || sections != (group?.sections ?? [])
+    }
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var duplicateName: Bool {
         func matches(_ other: String) -> Bool {
@@ -146,21 +149,12 @@ struct CustomListEditor: View {
                 }
             }
             Section {
-                ForEach(sections) { section in Text(section.name) }
+                ForEach(sections) { section in
+                    Button(section.name) { editingSection = section }.foregroundStyle(.primary)
+                }
                     .onMove { sections.move(fromOffsets: $0, toOffset: $1) }
                     .onDelete { sections.remove(atOffsets: $0) }
-                Button("New Group") { sectionName = ""; addingSection = true }
-                    .tint(.blue)
-                    .alert("New Group", isPresented: $addingSection) {
-                        TextField("Group name", text: $sectionName)
-                        Button("Cancel", role: .cancel) {}
-                        Button("Add") {
-                            sections.append(TaskListSection(name: trimmedSectionName))
-                        }
-                        .disabled(trimmedSectionName.isEmpty || sections.contains {
-                            $0.name.caseInsensitiveCompare(trimmedSectionName) == .orderedSame
-                        })
-                    }
+                Button("New Group") { addingSection = true }.tint(.blue)
             } header: {
                 Text("Groups")
             } footer: {
@@ -189,8 +183,16 @@ struct CustomListEditor: View {
         }
         .onAppear { if group == nil { nameFocused = true } }
         .navigationTitle(group == nil ? "New List" : "Edit List")
+        .sheet(isPresented: $addingSection) {
+            TaskGroupEditor(sections: sections) { sections.append($0) }
+        }
+        .sheet(item: $editingSection) { section in
+            TaskGroupEditor(section: section, sections: sections) { edited in
+                if let index = sections.firstIndex(where: { $0.id == edited.id }) { sections[index] = edited }
+            }
+        }
+        .confirmUnsavedChanges(hasChanges)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
                 Button(group == nil ? "Create" : "Save") { save() }.disabled(!canSave)
             }

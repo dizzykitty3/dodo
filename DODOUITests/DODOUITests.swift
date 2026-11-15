@@ -76,6 +76,84 @@ final class DODOUITests: XCTestCase {
     }
 
     @MainActor
+    func testUnsavedListRequiresConfirmationOnSwipeAndCancel() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-test-in-memory"]
+        app.launch()
+        app.buttons["New List"].tap()
+        let name = app.textFields["List name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.typeText("Weekend\n")
+        let bar = app.navigationBars["New List"]
+        let start = bar.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+        start.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)))
+        XCTAssertTrue(app.buttons["Keep Editing"].waitForExistence(timeout: 5))
+        app.buttons["Keep Editing"].tap()
+        XCTAssertEqual(name.value as? String, "Weekend")
+        start.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)))
+        app.buttons["Discard Changes"].tap()
+        XCTAssertTrue(bar.waitForNonExistence(timeout: 5))
+        app.buttons["New List"].tap()
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.typeText("Weekend\n")
+        bar.buttons["Cancel"].tap()
+        app.buttons["Discard Changes"].tap()
+        XCTAssertTrue(bar.waitForNonExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testUnsavedTaskAndSearchEdit() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-test-in-memory"]
+        app.launch()
+        app.buttons["New Task"].tap()
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.navigationBars["New Task"].waitForNonExistence(timeout: 5))
+        app.buttons["New Task"].tap()
+        let title = app.textViews["Title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.typeText("Original task")
+        app.buttons["Close"].tap()
+        app.buttons["Keep Editing"].tap()
+        XCTAssertEqual(title.value as? String, "Original task")
+        app.buttons["Save"].tap()
+        app.buttons["Search"].tap()
+        XCTAssertTrue(app.navigationBars["Search"].waitForExistence(timeout: 5))
+        app.buttons["Original task"].tap()
+        XCTAssertTrue(app.navigationBars["Edit Task"].waitForExistence(timeout: 5))
+        title.tap()
+        title.typeText(" changed")
+        app.navigationBars["Edit Task"].buttons["Back"].tap()
+        app.buttons["Discard Changes"].tap()
+        XCTAssertTrue(app.navigationBars["Search"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Original task"].firstMatch.exists)
+    }
+
+    @MainActor
+    func testUnsavedGroupRequiresConfirmation() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-test-in-memory"]
+        app.launch()
+        app.buttons["New List"].tap()
+        let name = app.textFields["List name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.typeText("Projects\n")
+        app.buttons["Create"].tap()
+        app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "Projects")).firstMatch.tap()
+        app.buttons["New Group"].tap()
+        let groupName = app.textFields["Group name"]
+        XCTAssertTrue(groupName.waitForExistence(timeout: 5))
+        groupName.typeText("Planning")
+        app.buttons["Cancel"].tap()
+        app.buttons["Keep Editing"].tap()
+        XCTAssertEqual(groupName.value as? String, "Planning")
+        app.buttons["Cancel"].tap()
+        app.buttons["Discard Changes"].tap()
+        XCTAssertTrue(app.navigationBars["New Group"].waitForNonExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Planning"].exists)
+    }
+
+    @MainActor
     func testExample() throws {
         // UI tests must launch the application that they test.
         let app = XCUIApplication()

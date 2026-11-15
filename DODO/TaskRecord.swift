@@ -6,7 +6,7 @@ enum RepeatRule: String, CaseIterable {
     case weekly = "Weekly", monthly = "Monthly", custom = "Custom"
 }
 
-struct Subtask: Codable, Identifiable {
+struct Subtask: Codable, Identifiable, Equatable {
     var id = UUID()
     var title = ""
     var isComplete = false
@@ -71,7 +71,7 @@ final class TaskRecord {
     }
 }
 
-struct TaskListSection: Identifiable, Codable {
+struct TaskListSection: Identifiable, Codable, Equatable {
     var id = UUID()
     var name: String
 }

@@ -50,9 +50,11 @@ struct CustomListsView: View {
         .toolbar { if !groups.isEmpty { EditButton() } }
         .sheet(isPresented: $creatingList) {
             NavigationStack { CustomListEditor() }
+                .confirmSheetDismissal()
         }
         .sheet(item: $editingGroup) { group in
             NavigationStack { CustomListEditor(group: group) }
+                .confirmSheetDismissal()
         }
         .alert("Delete List?", isPresented: $deleting) {
             Button("Cancel", role: .cancel) {}

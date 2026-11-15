@@ -29,7 +29,6 @@ struct TaskEditor: View {
     private enum Field: Hashable { case subtask(UUID) }
     @FocusState private var focusedField: Field?
     @State private var didSave = false
-    @State private var confirmingDiscard = false
     @State private var confirmingDelete = false
     @State private var errorMessage: String?
 
@@ -151,19 +150,8 @@ struct TaskEditor: View {
         }
         .onChange(of: group) { sectionID = nil }
         .navigationTitle(task == nil ? "New Task" : "Edit Task")
-        .interactiveDismissDisabled(hasNewTaskChanges)
+        .confirmUnsavedChanges(hasChanges, pushed: task != nil, closeTitle: "Close")
         .toolbar {
-            if task == nil {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close", systemImage: "xmark") {
-                        if hasNewTaskChanges { confirmingDiscard = true } else { dismiss() }
-                    }
-                    .confirmationDialog("Discard this task?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
-                        Button("Discard changes", role: .destructive) { dismiss() }
-                        Button("Keep editing", role: .cancel) {}
-                    }
-                }
-            }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") { save() }
                     .disabled(!canSave)
@@ -181,8 +169,16 @@ struct TaskEditor: View {
         } message: { Text(errorMessage ?? "") }
     }
 
-    private var hasNewTaskChanges: Bool {
-        task == nil && (!title.isEmpty || !linkText.isEmpty || sectionID != presetSectionID || group != presetGroup || urgent != presetUrgent || hasDate != presetToday || (hasDate && !Calendar.current.isDate(date, inSameDayAs: initialDate)) || rule != .never || !subtasks.isEmpty)
+    private var hasChanges: Bool {
+        let originalRule = RepeatRule(rawValue: task?.repeatRule ?? "") ?? .never
+        return title != Self.singleLine(task?.title ?? "") || linkText != (task?.link?.absoluteString ?? "")
+            || group != (task?.group ?? presetGroup) || sectionID != (task?.sectionID ?? presetSectionID)
+            || urgent != (task?.isUrgent ?? presetUrgent) || rule != originalRule
+            || hasDate != (task?.dueDay != nil || presetToday)
+            || (hasDate && !Calendar.current.isDate(date, inSameDayAs: initialDate))
+            || (rule == .monthly && monthDay != (task?.repeatDay ?? Calendar(identifier: .gregorian).component(.day, from: initialDate)))
+            || (rule == .custom && selectedWeekdays != Set(task?.repeatWeekdays ?? []))
+            || subtasks != (task?.displayedSubtasks ?? [])
     }
 
     private func insertSubtask(at index: Int) {

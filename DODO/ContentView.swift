@@ -181,6 +181,7 @@ struct ContentView: View {
                             .navigationTitle("Search")
                             .navigationBarTitleDisplayMode(.inline)
                             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search tasks")
+                            .toolbar { sheetCloseButton }
                     case .newList:
                         CustomListEditor()
                     case .editList(let group):
@@ -190,21 +191,22 @@ struct ContentView: View {
                                      hideUndatedFromTodayPreview: $hideUndatedFromTodayPreview,
                                      sortScheduled: $sortScheduled, sortCompleted: $sortCompleted,
                                      completedCount: archives.reduce(0) { $0 + $1.count } + tasks.filter(\.countedCompletion).count)
+                            .toolbar { sheetCloseButton }
                     case .compose(let composeSource, let sectionID):
                         TaskEditor(presetToday: composeSource == .today, presetUrgent: composeSource == .urgent,
                                    presetGroup: composeSource?.group, presetSectionID: sectionID, onCreate: { didCreateTask = true })
                     }
                 }
-                .toolbar {
-                    if selected.isSearch || selected == .settings {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Close", systemImage: "xmark") { panel = nil }
-                        }
-                    }
-                }
             }
             .overlay { if selected.isSearch { toastPill } }
+            .confirmSheetDismissal()
             .presentationDetents([.large])
+        }
+    }
+
+    private var sheetCloseButton: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Close", systemImage: "xmark") { panel = nil }
         }
     }
 
@@ -639,35 +641,17 @@ private struct TaskBadges: View {
 private struct NewTaskGroupButton: View {
     @Environment(\.modelContext) private var context
     let list: TaskGroup
-    @State private var name = ""
     @State private var creating = false
-    @State private var error: String?
-
-    private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
-        Button("New Group", systemImage: "folder.badge.plus") {
-            name = ""
-            creating = true
-        }
-        .labelStyle(.iconOnly)
-        .alert("New Group", isPresented: $creating) {
-            TextField("Group name", text: $name)
-            Button("Cancel", role: .cancel) {}
-            Button("Create") {
-                guard !trimmedName.isEmpty else { return }
-                guard !list.sections.contains(where: { $0.name.caseInsensitiveCompare(trimmedName) == .orderedSame }) else {
-                    error = "A group with this name already exists in this list."
-                    return
+        Button("New Group", systemImage: "folder.badge.plus") { creating = true }
+            .labelStyle(.iconOnly)
+            .sheet(isPresented: $creating) {
+                TaskGroupEditor(sections: list.sections) { section in
+                    list.sections.append(section)
+                    do { try context.save() }
+                    catch { context.rollback(); throw error }
                 }
-                list.sections.append(TaskListSection(name: trimmedName))
-                do { try context.save() }
-                catch { context.rollback(); self.error = error.localizedDescription }
             }
-            .disabled(trimmedName.isEmpty)
-        }
-        .alert("Couldn’t Create Group", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-            Button("OK") {}
-        } message: { Text(error ?? "") }
     }
 }
