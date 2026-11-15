@@ -154,6 +154,34 @@ final class DODOUITests: XCTestCase {
     }
 
     @MainActor
+    func testSettingsOpensDataFilePickers() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-test-in-memory"]
+        app.launch()
+        app.buttons["Settings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        let export = app.buttons["Export Data"]
+        for _ in 0..<8 {
+            if export.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(export.isHittable)
+        export.tap()
+        XCTAssertTrue(app.buttons["DOCPicker.actionButton"].waitForExistence(timeout: 10), app.debugDescription)
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(export.waitForExistence(timeout: 5))
+        let importButton = app.buttons["Import Data"]
+        for _ in 0..<4 {
+            if importButton.exists && importButton.isHittable { break }
+            app.swipeUp()
+        }
+        importButton.tap()
+        XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 10), app.debugDescription)
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testExample() throws {
         // UI tests must launch the application that they test.
         let app = XCUIApplication()

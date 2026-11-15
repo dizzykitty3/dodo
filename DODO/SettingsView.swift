@@ -11,6 +11,7 @@ struct SettingsView: View {
     var listBadge = ListBadgePreferences()
     var dateBadge = DateBadgePreferences()
     let completedCount: Int
+    var onImport: () -> Void = {}
 
     var body: some View {
         Form {
@@ -93,6 +94,8 @@ struct SettingsView: View {
             } footer: {
                 Text("Permanently delete tasks after the selected time has passed since they entered Recently Deleted.")
             }
+
+            DataTransferSection(onImport: onImport)
 
             Section("Stats & About") {
                 LabeledContent("Tasks Completed", value: completedCount.formatted())

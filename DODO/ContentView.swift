@@ -190,7 +190,11 @@ struct ContentView: View {
                         SettingsView(previewLimit: $todayPreviewLimit, urgentPreviewLimit: $urgentPreviewLimit,
                                      hideUndatedFromTodayPreview: $hideUndatedFromTodayPreview,
                                      sortScheduled: $sortScheduled, sortCompleted: $sortCompleted,
-                                     completedCount: archives.reduce(0) { $0 + $1.count } + tasks.filter(\.countedCompletion).count)
+                                     completedCount: archives.reduce(0) { $0 + $1.count } + tasks.filter(\.countedCompletion).count,
+                                     onImport: {
+                                         path = NavigationPath()
+                                         pendingRemoval = [:]
+                                     })
                             .toolbar { sheetCloseButton }
                     case .compose(let composeSource, let sectionID):
                         TaskEditor(presetToday: composeSource == .today, presetUrgent: composeSource == .urgent,
