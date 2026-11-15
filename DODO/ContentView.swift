@@ -74,12 +74,19 @@ struct ContentView: View {
     private struct CleanupSchedule: Equatable {
         let policy: CleanupPolicy
         let deadline: Date?
+        let revision: Int
     }
+
+    @State private var clockRevision = 0
 
     private var cleanupSchedule: CleanupSchedule {
         let policy = CleanupPolicy(clear: cleanupInterval, delete: trashRetention)
-        let deadline = scenePhase == .active ? tasks.compactMap { policy.deadline(for: $0) }.min() : nil
-        return CleanupSchedule(policy: policy, deadline: deadline)
+        let midnight = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: .now))
+        let deadlines = tasks.compactMap { policy.deadline(for: $0) }
+            + tasks.compactMap { CompletedTaskCleanup.rolloverDeadline(for: $0) }
+            + [midnight].compactMap { $0 }
+        let deadline = scenePhase == .active ? deadlines.min() : nil
+        return CleanupSchedule(policy: policy, deadline: deadline, revision: clockRevision)
     }
 
     @AppStorage("hideUndatedFromTodayPreview") private var hideUndatedFromTodayPreview = false
@@ -159,12 +166,17 @@ struct ContentView: View {
             do {
                 if deadline > .now { try await Task.sleep(for: .seconds(deadline.timeIntervalSinceNow)) }
                 try Task.checkCancellation()
+                try CompletedTaskCleanup.rollOver(tasks, now: .now, context: context)
                 try CompletedTaskCleanup.apply(tasks, policy: schedule.policy, now: .now, context: context)
+                clockRevision += 1
             } catch is CancellationError {
                 return
             } catch {
                 storageError = error.localizedDescription
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            clockRevision += 1
         }
         .overlay { toastPill }
         .task(id: toastID) {

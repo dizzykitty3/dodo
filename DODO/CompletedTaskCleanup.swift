@@ -91,20 +91,47 @@ enum CompletedTaskCleanup {
         record.successorKey = nil
     }
 
-    static func scheduleNext(after record: TaskRecord, context: ModelContext) {
+    static func scheduleNext(after record: TaskRecord, context: ModelContext, notBefore: Date? = nil) {
         guard record.successorKey == nil, let completion = record.completedAt,
               let rule = RepeatRule(rawValue: record.repeatRule), rule != .never else { return }
         let calendar = Calendar(identifier: .gregorian)
         let scheduled = record.dueDay.flatMap { try? TaskRecord.dayFormat.parseStrategy.parse($0) }
-        let anchor = calendar.startOfDay(for: max(scheduled ?? completion, completion))
-        let weekday = scheduled.map { calendar.component(.weekday, from: $0) }
-            ?? record.repeatDay ?? calendar.component(.weekday, from: completion)
-        let monthDay = record.repeatDay ?? calendar.component(.day, from: scheduled ?? completion)
+        let anchor: Date
+        if let notBefore {
+            // Automatic rollover includes today; manual completion still advances beyond today.
+            guard let previousDay = calendar.date(byAdding: .day, value: -1,
+                                                   to: calendar.startOfDay(for: notBefore)) else { return }
+            anchor = max(calendar.startOfDay(for: scheduled ?? completion), previousDay)
+        } else {
+            anchor = calendar.startOfDay(for: max(scheduled ?? completion, completion))
+        }
+        guard let date = nextScheduledDate(after: anchor, scheduled: scheduled ?? completion, record: record) else { return }
+        let next = TaskRecord(title: record.title)
+        let key = UUID()
+        next.occurrenceKey = key
+        record.successorKey = key
+        next.dueDay = date.formatted(TaskRecord.dayFormat)
+        next.repeatRule = record.repeatRule
+        next.repeatWeekdays = record.repeatWeekdays
+        next.repeatDay = rule == .monthly ? (record.repeatDay ?? calendar.component(.day, from: scheduled ?? completion)) : nil
+        next.link = record.link
+        next.group = record.group
+        next.sectionID = record.sectionID
+        next.isUrgent = record.isUrgent
+        next.subtasks = record.subtasks.map { Subtask(title: $0.title) }
+        context.insert(next)
+    }
+
+    private static func nextScheduledDate(after anchor: Date, scheduled: Date, record: TaskRecord) -> Date? {
+        guard let rule = RepeatRule(rawValue: record.repeatRule), rule != .never else { return nil }
+        let calendar = Calendar(identifier: .gregorian)
+        let weekday = calendar.component(.weekday, from: scheduled)
+        let monthDay = record.repeatDay ?? calendar.component(.day, from: scheduled)
         let selectedDays = Set(record.repeatWeekdays.filter { (1...7).contains($0) })
-        guard rule != .custom || !selectedDays.isEmpty else { return }
+        guard rule != .custom || !selectedDays.isEmpty else { return nil }
         var date = anchor
         repeat {
-            guard let day = calendar.date(byAdding: .day, value: 1, to: date) else { return }
+            guard let day = calendar.date(byAdding: .day, value: 1, to: date) else { return nil }
             date = day
             switch rule {
             case .daily: break
@@ -119,23 +146,42 @@ enum CompletedTaskCleanup {
             case .monthly:
                 let length = calendar.range(of: .day, in: .month, for: date)!.count
                 if calendar.component(.day, from: date) != min(length, max(1, monthDay)) { continue }
-            case .never: return
+            case .never: return nil
             }
             break
         } while true
-        let next = TaskRecord(title: record.title)
-        let key = UUID()
-        next.occurrenceKey = key
-        record.successorKey = key
-        next.dueDay = date.formatted(TaskRecord.dayFormat)
-        next.repeatRule = record.repeatRule
-        next.repeatWeekdays = record.repeatWeekdays
-        next.repeatDay = rule == .monthly ? record.repeatDay : nil
-        next.link = record.link
-        next.group = record.group
-        next.sectionID = record.sectionID
-        next.isUrgent = record.isUrgent
-        next.subtasks = record.subtasks.map { Subtask(title: $0.title) }
-        context.insert(next)
+        return date
+    }
+
+    static func rolloverDeadline(for record: TaskRecord) -> Date? {
+        // Explicitly restored occurrences stay available for the user to finish again.
+        guard record.deletedAt == nil, record.completedAt == nil, !record.countedCompletion,
+              record.successorKey == nil,
+              let rule = RepeatRule(rawValue: record.repeatRule), rule != .never,
+              rule != .custom || record.repeatWeekdays.contains(where: { (1...7).contains($0) }),
+              let day = record.dueDay,
+              let date = try? TaskRecord.dayFormat.parseStrategy.parse(day) else { return nil }
+        return nextScheduledDate(after: date, scheduled: date, record: record)
+    }
+
+    static func rollOver(_ records: [TaskRecord], now: Date, context: ModelContext) throws {
+        let overdue = records.filter { rolloverDeadline(for: $0).map { $0 <= now } ?? false }
+        guard !overdue.isEmpty else { return }
+        do {
+            for record in overdue {
+                record.completedAt = now
+                record.countedCompletion = true
+                record.subtasks = record.subtasks.map {
+                    var child = $0
+                    child.isComplete = true
+                    return child
+                }
+                scheduleNext(after: record, context: context, notBefore: now)
+            }
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
     }
 }
