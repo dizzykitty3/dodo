@@ -113,7 +113,7 @@ enum CompletedTaskCleanup {
         next.dueDay = date.formatted(TaskRecord.dayFormat)
         next.repeatRule = record.repeatRule
         next.repeatWeekdays = record.repeatWeekdays
-        next.repeatDay = rule == .monthly ? (record.repeatDay ?? calendar.component(.day, from: scheduled ?? completion)) : nil
+        next.repeatDay = (rule == .monthly || rule == .yearly) ? recurrenceDay(for: record, scheduled: scheduled ?? completion) : nil
         next.link = record.link
         next.group = record.group
         next.sectionID = record.sectionID
@@ -122,11 +122,22 @@ enum CompletedTaskCleanup {
         context.insert(next)
     }
 
+    static func recurrenceDay(for record: TaskRecord, scheduled: Date) -> Int {
+        let calendar = Calendar(identifier: .gregorian)
+        let day = calendar.component(.day, from: scheduled)
+        let lastDay = calendar.range(of: .day, in: .month, for: scheduled)?.count
+        // repeatDay only preserves a date clamped by a shorter month, not a separate user choice.
+        if day == lastDay, let original = record.repeatDay, original > day, original <= 31 {
+            return original
+        }
+        return day
+    }
+
     private static func nextScheduledDate(after anchor: Date, scheduled: Date, record: TaskRecord) -> Date? {
         guard let rule = RepeatRule(rawValue: record.repeatRule), rule != .never else { return nil }
         let calendar = Calendar(identifier: .gregorian)
         let weekday = calendar.component(.weekday, from: scheduled)
-        let monthDay = record.repeatDay ?? calendar.component(.day, from: scheduled)
+        let monthDay = recurrenceDay(for: record, scheduled: scheduled)
         let selectedDays = Set(record.repeatWeekdays.filter { (1...7).contains($0) })
         guard rule != .custom || !selectedDays.isEmpty else { return nil }
         var date = anchor
@@ -143,6 +154,13 @@ enum CompletedTaskCleanup {
                 if !selectedDays.contains(calendar.component(.weekday, from: date)) { continue }
             case .weekly:
                 if calendar.component(.weekday, from: date) != min(7, max(1, weekday)) { continue }
+            case .biweekly:
+                let distance = calendar.dateComponents([.day], from: calendar.startOfDay(for: scheduled), to: date).day ?? 0
+                if distance <= 0 || distance % 14 != 0 { continue }
+            case .yearly:
+                if calendar.component(.month, from: date) != calendar.component(.month, from: scheduled) { continue }
+                let length = calendar.range(of: .day, in: .month, for: date)!.count
+                if calendar.component(.day, from: date) != min(length, monthDay) { continue }
             case .monthly:
                 let length = calendar.range(of: .day, in: .month, for: date)!.count
                 if calendar.component(.day, from: date) != min(length, max(1, monthDay)) { continue }

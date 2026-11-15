@@ -122,3 +122,59 @@ import Testing
         }
     }
 }
+
+@MainActor
+@Test func monthlyUsesTaskDateAndBiweeklyKeepsItsOriginalCadence() throws {
+    let cases: [(RepeatRule, String, String, Int?, String)] = [
+        (.monthly, "2026-11-16", "2026-11-16", 5, "2026-12-16"),
+        (.biweekly, "2026-11-02", "2026-11-02", nil, "2026-11-16"),
+        (.biweekly, "2026-11-02", "2026-11-17", nil, "2026-11-30"),
+        (.yearly, "2026-11-16", "2026-11-16", nil, "2027-11-16")
+    ]
+    for (rule, due, completion, legacyDay, expected) in cases {
+        let container = try ModelContainer(for: TaskRecord.self,
+                                          configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let task = TaskRecord(title: rule.rawValue)
+        task.dueDay = due; task.repeatRule = rule.rawValue; task.repeatDay = legacyDay
+        task.completedAt = try TaskRecord.dayFormat.parseStrategy.parse(completion)
+        container.mainContext.insert(task)
+        CompletedTaskCleanup.scheduleNext(after: task, context: container.mainContext)
+        let next = try #require(container.mainContext.fetch(FetchDescriptor<TaskRecord>()).first { $0.completedAt == nil })
+        #expect(next.dueDay == expected)
+    }
+}
+
+@MainActor
+@Test func biweeklyAndYearlyRolloverWaitForTheirBoundaryAndPreserveLeapDay() throws {
+    let container = try ModelContainer(for: TaskRecord.self, CompletionArchive.self,
+                                      configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    let context = container.mainContext
+    let biweekly = TaskRecord(title: "Fortnight")
+    biweekly.repeatRule = RepeatRule.biweekly.rawValue; biweekly.dueDay = "2026-11-02"
+    context.insert(biweekly)
+    let boundary = try TaskRecord.dayFormat.parseStrategy.parse("2026-11-16")
+    #expect(CompletedTaskCleanup.rolloverDeadline(for: biweekly) == boundary)
+    try CompletedTaskCleanup.rollOver([biweekly], now: boundary.addingTimeInterval(-1), context: context)
+    #expect(biweekly.completedAt == nil)
+    try CompletedTaskCleanup.rollOver([biweekly], now: boundary, context: context)
+    #expect(biweekly.completedAt == boundary)
+    #expect(try context.fetch(FetchDescriptor<TaskRecord>()).contains { $0.title == "Fortnight" && $0.dueDay == "2026-11-16" })
+
+    var yearly = TaskRecord(title: "Leap day")
+    yearly.repeatRule = RepeatRule.yearly.rawValue; yearly.dueDay = "2024-02-29"
+    context.insert(yearly)
+    for day in ["2025-02-28", "2026-02-28", "2027-02-28", "2028-02-29"] {
+        let nextDate = try TaskRecord.dayFormat.parseStrategy.parse(day)
+        #expect(CompletedTaskCleanup.rolloverDeadline(for: yearly) == nextDate)
+        try CompletedTaskCleanup.rollOver([yearly], now: nextDate.addingTimeInterval(-1), context: context)
+        #expect(yearly.completedAt == nil)
+        try CompletedTaskCleanup.rollOver([yearly], now: nextDate, context: context)
+        let key = try #require(yearly.successorKey)
+        yearly = try #require(context.fetch(FetchDescriptor<TaskRecord>()).first { $0.occurrenceKey == key })
+        #expect(yearly.dueDay == day && yearly.repeatDay == 29)
+    }
+    // Both new rule values must survive the existing v1 backup round trip.
+    let decoded = try DODOBackup.decode(BackupStore.snapshot(context: context).encoded())
+    #expect(decoded.tasks.contains { $0.repeatRule == RepeatRule.biweekly.rawValue })
+    #expect(decoded.tasks.contains { $0.repeatRule == RepeatRule.yearly.rawValue })
+}

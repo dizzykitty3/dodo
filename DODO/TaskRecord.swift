@@ -3,7 +3,7 @@ import SwiftData
 
 enum RepeatRule: String, CaseIterable {
     case never = "Never", daily = "Daily", weekdays = "Weekdays", weekends = "Weekends"
-    case weekly = "Weekly", monthly = "Monthly", custom = "Custom"
+    case weekly = "Weekly", biweekly = "Every Two Weeks", monthly = "Monthly", yearly = "Yearly", custom = "Custom"
 }
 
 struct Subtask: Codable, Identifiable, Equatable {
