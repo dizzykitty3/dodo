@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Binding var sortCompleted: Bool
     @AppStorage("completedCleanupInterval") private var cleanupInterval = CleanupInterval.never
     @AppStorage("trashRetention") private var trashRetention = TrashRetention.sevenDays
+    @AppStorage("newTasksDueToday") private var newTasksDueToday = false
     var listBadge = ListBadgePreferences()
     var dateBadge = DateBadgePreferences()
     let completedCount: Int
@@ -15,6 +16,13 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                Toggle("Default Due Date to Today", isOn: $newTasksDueToday)
+            } header: {
+                Text("New Tasks")
+            } footer: {
+                Text("New tasks start with today’s date. You can change or remove it before saving.")
+            }
             Section("Urgent Card") { previewLimitPicker($urgentPreviewLimit) }
             Section("Today Card") {
                 previewLimitPicker($previewLimit)

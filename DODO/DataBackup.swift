@@ -9,6 +9,8 @@ enum BackupError: LocalizedError {
 }
 
 struct BackupPreferences: Codable {
+    // Older v1 backups omit this preference; replacement restores the default of false.
+    var newTasksDueToday: Bool?
     var todayPreviewLimit: Int
     var urgentPreviewLimit: Int
     var hideUndatedFromTodayPreview: Bool
@@ -29,6 +31,7 @@ struct BackupPreferences: Codable {
 
     init(defaults: UserDefaults) {
         func value<T>(_ key: String, _ fallback: T) -> T { defaults.object(forKey: key) as? T ?? fallback }
+        newTasksDueToday = value("newTasksDueToday", false)
         todayPreviewLimit = value("todayPreviewLimit", 5)
         urgentPreviewLimit = value("urgentPreviewLimit", 5)
         hideUndatedFromTodayPreview = value("hideUndatedFromTodayPreview", false)
@@ -65,6 +68,7 @@ struct BackupPreferences: Codable {
     func apply(to defaults: UserDefaults) {
         // Only app-owned settings are imported, never arbitrary UserDefaults keys.
         let values: [String: Any?] = [
+            "newTasksDueToday": newTasksDueToday ?? false,
             "todayPreviewLimit": todayPreviewLimit, "urgentPreviewLimit": urgentPreviewLimit,
             "hideUndatedFromTodayPreview": hideUndatedFromTodayPreview,
             "sortScheduledByDate": sortScheduledByDate, "sortCompletedByDate": sortCompletedByDate,

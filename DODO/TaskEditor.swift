@@ -13,6 +13,7 @@ struct TaskEditor: View {
     let presetToday: Bool
     let presetUrgent: Bool
     @State private var initialDate: Date
+    @State private var initialHasDate: Bool
     let onDelete: () -> Void
     let onCreate: () -> Void
 
@@ -47,7 +48,10 @@ struct TaskEditor: View {
         _title = State(initialValue: Self.singleLine(task?.title ?? ""))
         _initialDate = State(initialValue: date)
         _date = State(initialValue: date)
-        _hasDate = State(initialValue: task?.dueDay != nil || presetToday)
+        let startsWithDate = task.map { $0.dueDay != nil }
+            ?? (presetToday || UserDefaults.standard.bool(forKey: "newTasksDueToday"))
+        _hasDate = State(initialValue: startsWithDate)
+        _initialHasDate = State(initialValue: startsWithDate)
         _rule = State(initialValue: rule)
         _selectedWeekdays = State(initialValue: Set(task?.repeatWeekdays ?? []))
         _urgent = State(initialValue: task?.isUrgent ?? presetUrgent)
@@ -169,7 +173,7 @@ struct TaskEditor: View {
         return title != Self.singleLine(task?.title ?? "") || linkText != (task?.link?.absoluteString ?? "")
             || group != (task?.group ?? presetGroup) || sectionID != (task?.sectionID ?? presetSectionID)
             || urgent != (task?.isUrgent ?? presetUrgent) || rule != originalRule
-            || hasDate != (task?.dueDay != nil || presetToday)
+            || hasDate != initialHasDate
             || (hasDate && !Calendar.current.isDate(date, inSameDayAs: initialDate))
             || (rule == .custom && selectedWeekdays != Set(task?.repeatWeekdays ?? []))
             || subtasks != (task?.displayedSubtasks ?? [])
