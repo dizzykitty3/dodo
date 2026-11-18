@@ -678,8 +678,7 @@ private struct NewTaskGroupButton: View {
     @State private var creating = false
 
     var body: some View {
-        Button("New Group", systemImage: "folder.badge.plus") { creating = true }
-            .labelStyle(.iconOnly)
+        Button("New Group") { creating = true }
             .sheet(isPresented: $creating) {
                 TaskGroupEditor(sections: list.sections) { section in
                     list.sections.append(section)
