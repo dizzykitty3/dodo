@@ -349,9 +349,19 @@ struct ContentView: View {
                     dateSectionDivider
                 }
                 daySection("No Date", undated)
-            } else if let group = list.group, !group.sections.isEmpty {
+            } else if let group = list.group {
                 let grouped = Dictionary(grouping: records, by: \.sectionID)
-                daySection("Ungrouped", grouped[nil] ?? [])
+                Section {
+                    rows(grouped[nil] ?? [], showsCheckbox: true)
+                    Button("New Task") { panel = .compose(list, sectionID: nil) }
+                        .tint(.blue)
+                } header: {
+                    Text("Ungrouped")
+                } footer: {
+                    if grouped[nil, default: []].isEmpty {
+                        Text("Tasks without a group appear here. Tap New Task to add one.")
+                    }
+                }
                 ForEach(group.sections) { section in
                     Section(section.name) {
                         rows(grouped[section.id] ?? [], showsCheckbox: true)
@@ -369,7 +379,7 @@ struct ContentView: View {
         }
         .environment(\.showsTaskListBadge, list.group == nil)
         .overlay {
-            if records.isEmpty && (list.group?.sections.isEmpty ?? true) {
+            if records.isEmpty && list.group == nil {
                 if list.canCreateTask {
                     ContentUnavailableView("No Tasks", systemImage: list.symbol,
                                            description: Text("Tap the compose button in the bottom-right corner to create a task."))
