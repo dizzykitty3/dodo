@@ -66,6 +66,7 @@ private enum Panel: Identifiable, Hashable {
 
 struct ContentView: View {
     private var listBadge = ListBadgePreferences()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("completedCleanupInterval") private var cleanupInterval = CleanupInterval.never
     @AppStorage("trashRetention") private var trashRetention = TrashRetention.sevenDays
@@ -495,36 +496,43 @@ struct ContentView: View {
         let entries = items(list)
         let limit = list == .urgent ? urgentPreviewLimit : todayPreviewLimit
         let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
-        return NavigationLink(value: list) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center) {
-                    Image(systemName: list.symbol).font(.title3.weight(.semibold))
-                    if list.hasPreview { Text(list.title).font(.title2.bold()) }
-                    if list.isCompact { Text(list.title).font(.headline) }
-                    Spacer(minLength: 2)
-                    Text("\(entries.count)").font(.title.bold()).monospacedDigit()
-                }
-                if list.hasPreview {
-                    let preview = list == .today && hideUndatedFromTodayPreview ? entries.filter { $0.dueDay != nil } : entries
-                    ForEach(preview.prefix(limit == -1 ? entries.count : max(0, limit))) { task in
-                        Divider().overlay(.white.opacity(0.25))
-                        HStack(spacing: 10) {
-                            Image(systemName: "circle").foregroundStyle(.white.opacity(0.7))
-                            TaskTitle(title: task.title).font(.body)
+        let visible = !list.isCompact || !entries.isEmpty
+        return Group {
+            if visible {
+                NavigationLink(value: list) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack(alignment: .center) {
+                            Image(systemName: list.symbol).font(.title3.weight(.semibold))
+                            if list.hasPreview { Text(list.title).font(.title2.bold()) }
+                            if list.isCompact { Text(list.title).font(.headline) }
+                            Spacer(minLength: 2)
+                            Text("\(entries.count)").font(.title.bold()).monospacedDigit()
+                        }
+                        if list.hasPreview {
+                            let preview = list == .today && hideUndatedFromTodayPreview ? entries.filter { $0.dueDay != nil } : entries
+                            ForEach(preview.prefix(limit == -1 ? entries.count : max(0, limit))) { task in
+                                Divider().overlay(.white.opacity(0.25))
+                                HStack(spacing: 10) {
+                                    Image(systemName: "circle").foregroundStyle(.white.opacity(0.7))
+                                    TaskTitle(title: task.title).font(.body)
+                                }
+                            }
+                        } else if !list.isCompact {
+                            Text(list.title).font(.headline)
                         }
                     }
-                } else if !list.isCompact {
-                    Text(list.title).font(.headline)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, list.hasPreview ? 20 : 16)
+                    .padding(.vertical, list.isCompact ? 8 : list.hasPreview ? 20 : 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(list.color.gradient, in: shape)
+                    .contentShape(shape)
                 }
+                .buttonStyle(.plain)
+                .transition(.opacity)
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, list.hasPreview ? 20 : 16)
-            .padding(.vertical, list.isCompact ? 8 : list.hasPreview ? 20 : 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(list.color.gradient, in: shape)
-            .contentShape(shape)
         }
-        .buttonStyle(.plain)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: visible)
     }
 }
 
