@@ -358,10 +358,6 @@ struct ContentView: View {
                         .tint(.blue)
                 } header: {
                     Text("Ungrouped")
-                } footer: {
-                    if grouped[nil, default: []].isEmpty {
-                        Text("Tasks without a group appear here. Tap New Task to add one.")
-                    }
                 }
                 ForEach(group.sections) { section in
                     Section(section.name) {
