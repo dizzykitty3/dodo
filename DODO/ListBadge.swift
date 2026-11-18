@@ -11,7 +11,7 @@ enum ListBadgeSeparator: String, CaseIterable {
         switch self {
         case .none: ""
         case .space: " "
-        case .hyphen: "-"
+        case .hyphen: " - "
         case .colon: ": "
         case .slash: " / "
         }

@@ -64,7 +64,7 @@ struct DataTransferSection: View {
             Button("Export Data") { export() }.tint(.blue)
             Button("Import Data") { importing = true }.tint(.blue)
         } header: {
-            Text("Data")
+            Text("Export & Import")
         } footer: {
             if busy { Text("Reading data…") }
             else { Text("Back up all tasks, lists, groups, and settings as a JSON file.") }

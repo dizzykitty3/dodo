@@ -160,6 +160,8 @@ final class DODOUITests: XCTestCase {
         app.launch()
         app.buttons["Settings"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        app.buttons["Tasks"].tap()
+        XCTAssertTrue(app.navigationBars["Tasks"].waitForExistence(timeout: 5))
         let export = app.buttons["Export Data"]
         for _ in 0..<8 {
             if export.isHittable { break }
@@ -178,7 +180,7 @@ final class DODOUITests: XCTestCase {
         importButton.tap()
         XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 10), app.debugDescription)
         app.buttons["Cancel"].tap()
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Tasks"].waitForExistence(timeout: 5))
     }
 
     @MainActor

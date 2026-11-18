@@ -1,7 +1,9 @@
 import SwiftData
 import SwiftUI
 
-struct CustomListsView: View {
+struct ListsSettingsView: View {
+    @Binding var sortScheduled: Bool
+    @Binding var sortCompleted: Bool
     @Environment(\.modelContext) private var context
     @Query(sort: TaskGroup.displayOrder) private var groups: [TaskGroup]
     @State private var selection: TaskGroup?
@@ -11,7 +13,15 @@ struct CustomListsView: View {
     @State private var error: String?
 
     var body: some View {
-        List {
+        Form {
+            Section {
+                Toggle("Sort Scheduled by Due Date", isOn: $sortScheduled)
+                Toggle("Sort Completed by Completion Time", isOn: $sortCompleted)
+            } header: {
+                Text("List Sorting")
+            } footer: {
+                Text("Lists show newly created tasks first by default.")
+            }
             Section {
                 ForEach(groups) { group in
                     Button {
@@ -41,13 +51,18 @@ struct CustomListsView: View {
                 }
                 Button("New List") { creatingList = true }
                     .tint(.blue)
+            } header: {
+                Text("Manage Lists")
             } footer: {
-                if !groups.isEmpty { Text("Drag to reorder or swipe to delete.") }
+                if groups.isEmpty {
+                    Text("Your custom task lists appear here. Tap New List to create one.")
+                } else {
+                    Text("Tap a list to edit. Drag to reorder or swipe to delete.")
+                }
             }
         }
-        .navigationTitle("Manage Lists")
+        .navigationTitle("Lists")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { if !groups.isEmpty { EditButton() } }
         .sheet(isPresented: $creatingList) {
             NavigationStack { CustomListEditor() }
                 .confirmSheetDismissal()
