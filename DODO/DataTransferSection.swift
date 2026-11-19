@@ -67,7 +67,7 @@ struct DataTransferSection: View {
             Text("Export & Import")
         } footer: {
             if busy { Text("Reading data…") }
-            else { Text("Back up all tasks, lists, groups, and settings as a JSON file.") }
+            else { Text("Back up all tasks, lists, tags, and settings as a JSON file.") }
         }
         .disabled(busy)
         .fileExporter(isPresented: $exporting, document: document, contentType: .json,

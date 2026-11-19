@@ -4,6 +4,9 @@ import SwiftData
 @main
 struct DODOApp: App {
     init() {
+        if let value = UserDefaults.standard.string(forKey: "listBadgeContent") {
+            UserDefaults.standard.set(ListBadgeContent.migratedValue(value), forKey: "listBadgeContent")
+        }
         DateBadgePreferences.initializeFromSystem()
     }
 

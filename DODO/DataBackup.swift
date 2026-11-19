@@ -39,7 +39,7 @@ struct BackupPreferences: Codable {
         sortCompletedByDate = value("sortCompletedByDate", true)
         completedCleanupInterval = value("completedCleanupInterval", 0)
         trashRetention = value("trashRetention", 7)
-        listBadgeContent = value("listBadgeContent", ListBadgeContent.list.rawValue)
+        listBadgeContent = ListBadgeContent.migratedValue(value("listBadgeContent", ListBadgeContent.list.rawValue))
         listBadgeSeparator = value("listBadgeSeparator", ListBadgeSeparator.space.rawValue)
         dateBadgeAbbreviatesMonth = value("dateBadgeAbbreviatesMonth", false)
         dateBadgeOrder = value("dateBadgeOrder", DateBadgeOrder.yearFirst.rawValue)
@@ -93,7 +93,7 @@ struct BackupList: Codable {
     var colorName: String
     var symbolName: String
     var position: Int
-    var groups: [TaskListSection]
+    var tags: [TaskTag]
 }
 
 struct BackupTask: Codable {
@@ -113,7 +113,7 @@ struct BackupTask: Codable {
     var restoredCompletion: Date?
     var countedCompletion: Bool
     var listID: UUID?
-    var groupID: UUID?
+    var tagID: UUID?
     var subtasks: [Subtask]
 
     init(_ task: TaskRecord, listID: UUID?) {
@@ -122,13 +122,13 @@ struct BackupTask: Codable {
         isUrgent = task.isUrgent; isPersonal = task.isPersonal; completedAt = task.completedAt
         occurrenceKey = task.occurrenceKey; successorKey = task.successorKey; deletedAt = task.deletedAt
         restoredCompletion = task.restoredCompletion; countedCompletion = task.countedCompletion
-        self.listID = listID; groupID = task.sectionID; subtasks = task.subtasks
+        self.listID = listID; tagID = task.tagID; subtasks = task.subtasks
     }
 }
 
 struct DODOBackup: Codable {
     var format = "dodo"
-    var schemaVersion = "v1"
+    var schemaVersion = "v2"
     var exportedAt = Date.now
     var preferences: BackupPreferences
     var archivedCompletedCount: Int
@@ -143,11 +143,36 @@ struct DODOBackup: Codable {
         do { header = try decoder.decode(Header.self, from: data) }
         catch { throw BackupError.invalid("Choose a DODO JSON data file.") }
         guard header.format == "dodo" else { throw BackupError.invalid("This is not a DODO data file.") }
-        guard header.schemaVersion == "v1" else {
+        guard ["v1", "v2"].contains(header.schemaVersion) else {
             throw BackupError.invalid("This data version is not supported. Update DODO before importing it.")
         }
         let backup: Self
-        do { backup = try decoder.decode(Self.self, from: data) }
+        do {
+            var json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+            if header.schemaVersion == "v1" {
+                json["schemaVersion"] = "v2"
+                if let lists = json["lists"] as? [[String: Any]] {
+                    json["lists"] = lists.map { original in
+                        var list = original
+                        list["tags"] = list.removeValue(forKey: "groups") ?? list["tags"]
+                        return list
+                    }
+                }
+                if let tasks = json["tasks"] as? [[String: Any]] {
+                    json["tasks"] = tasks.map { original in
+                        var task = original
+                        task["tagID"] = task.removeValue(forKey: "groupID") ?? task["tagID"]
+                        return task
+                    }
+                }
+            }
+            if var preferences = json["preferences"] as? [String: Any],
+               let content = preferences["listBadgeContent"] as? String {
+                preferences["listBadgeContent"] = ListBadgeContent.migratedValue(content)
+                json["preferences"] = preferences
+            }
+            backup = try decoder.decode(Self.self, from: JSONSerialization.data(withJSONObject: json))
+        }
         catch { throw BackupError.invalid("The DODO data file is incomplete or damaged.") }
         try backup.validate()
         return backup
@@ -162,9 +187,9 @@ struct DODOBackup: Codable {
     }
 
     func validate() throws {
-        guard format == "dodo", schemaVersion == "v1" else { throw BackupError.invalid("Unsupported DODO data file.") }
+        guard format == "dodo", schemaVersion == "v2" else { throw BackupError.invalid("Unsupported DODO data file.") }
         try preferences.validate()
-        func invalid() -> BackupError { .invalid("The file contains invalid tasks, lists, or groups.") }
+        func invalid() -> BackupError { .invalid("The file contains invalid tasks, lists, or tags.") }
         guard archivedCompletedCount >= 0,
               !archivedCompletedCount.addingReportingOverflow(tasks.filter(\.countedCompletion).count).overflow,
               Set(lists.map(\.id)).count == lists.count else { throw invalid() }
@@ -172,8 +197,8 @@ struct DODOBackup: Codable {
         for list in lists {
             guard !list.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   ListCardColor(rawValue: list.colorName) != nil, ListCardIcon(rawValue: list.symbolName) != nil,
-                  Set(list.groups.map(\.id)).count == list.groups.count,
-                  list.groups.allSatisfy({ !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else { throw invalid() }
+                  Set(list.tags.map(\.id)).count == list.tags.count,
+                  list.tags.allSatisfy({ !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else { throw invalid() }
         }
         var successors: [UUID: UUID] = [:]
         var occurrenceKeys = Set<UUID>()
@@ -197,8 +222,8 @@ struct DODOBackup: Codable {
             }
             if let listID = task.listID {
                 guard let list = byID[listID] else { throw invalid() }
-                if let groupID = task.groupID, !list.groups.contains(where: { $0.id == groupID }) { throw invalid() }
-            } else if task.groupID != nil { throw invalid() }
+                if let tagID = task.tagID, !list.tags.contains(where: { $0.id == tagID }) { throw invalid() }
+            } else if task.tagID != nil { throw invalid() }
             if let key = task.occurrenceKey {
                 guard occurrenceKeys.insert(key).inserted else { throw invalid() }
                 successors[key] = task.successorKey
@@ -223,17 +248,17 @@ enum BackupStore {
     enum ImportMode { case replace, merge }
 
     static func snapshot(context: ModelContext, defaults: UserDefaults = .standard) throws -> DODOBackup {
-        let lists = try context.fetch(FetchDescriptor<TaskGroup>(sortBy: TaskGroup.displayOrder))
+        let lists = try context.fetch(FetchDescriptor<TaskListRecord>(sortBy: TaskListRecord.displayOrder))
         let ids = Dictionary(uniqueKeysWithValues: lists.map { ($0.persistentModelID, UUID()) })
         let exportedLists = lists.map {
             BackupList(id: ids[$0.persistentModelID]!, name: $0.name, createdAt: $0.createdAt,
-                       colorName: $0.colorName, symbolName: $0.symbolName, position: $0.position, groups: $0.sections)
+                       colorName: $0.colorName, symbolName: $0.symbolName, position: $0.position, tags: $0.tags)
         }
         let tasks = try context.fetch(FetchDescriptor<TaskRecord>(sortBy: [SortDescriptor(\.createdAt)]))
         let archives = try context.fetch(FetchDescriptor<CompletionArchive>())
         return DODOBackup(preferences: BackupPreferences(defaults: defaults),
                           archivedCompletedCount: try sum(archives.map(\.count)),
-                          lists: exportedLists, tasks: tasks.map { BackupTask($0, listID: $0.group.flatMap { ids[$0.persistentModelID] }) })
+                          lists: exportedLists, tasks: tasks.map { BackupTask($0, listID: $0.list.flatMap { ids[$0.persistentModelID] }) })
     }
 
     static func apply(_ backup: DODOBackup, mode: ImportMode, context: ModelContext,
@@ -245,7 +270,7 @@ enum BackupStore {
         context.autosaveEnabled = false
         defer { context.autosaveEnabled = autosave }
         do {
-            var lists = try context.fetch(FetchDescriptor<TaskGroup>(sortBy: TaskGroup.displayOrder))
+            var lists = try context.fetch(FetchDescriptor<TaskListRecord>(sortBy: TaskListRecord.displayOrder))
             let existingTasks = try context.fetch(FetchDescriptor<TaskRecord>())
             let archives = try context.fetch(FetchDescriptor<CompletionArchive>())
             if mode == .replace {
@@ -258,15 +283,15 @@ enum BackupStore {
                                                   backup.archivedCompletedCount, backup.tasks.filter(\.countedCompletion).count])
                 for (index, list) in lists.enumerated() { list.position = index }
             }
-            var listMap: [UUID: TaskGroup] = [:]
-            var groupMap: [UUID: [UUID: UUID]] = [:]
+            var listMap: [UUID: TaskListRecord] = [:]
+            var tagMap: [UUID: [UUID: UUID]] = [:]
             let orderedLists = backup.lists.sorted { $0.position == $1.position ? $0.createdAt < $1.createdAt : $0.position < $1.position }
             for incoming in orderedLists {
                 let existing = mode == .merge ? lists.first { matches($0.name, incoming.name) } : nil
-                let list: TaskGroup
+                let list: TaskListRecord
                 if let existing { list = existing }
                 else {
-                    list = TaskGroup(name: incoming.name, position: mode == .replace ? incoming.position : lists.count)
+                    list = TaskListRecord(name: incoming.name, position: mode == .replace ? incoming.position : lists.count)
                     list.createdAt = incoming.createdAt
                     list.colorName = incoming.colorName
                     list.symbolName = incoming.symbolName
@@ -275,16 +300,16 @@ enum BackupStore {
                 }
                 listMap[incoming.id] = list
                 var mapping: [UUID: UUID] = [:]
-                for group in incoming.groups {
-                    if mode == .merge, let existing = list.sections.first(where: { matches($0.name, group.name) }) {
-                        mapping[group.id] = existing.id
+                for tag in incoming.tags {
+                    if mode == .merge, let existing = list.tags.first(where: { matches($0.name, tag.name) }) {
+                        mapping[tag.id] = existing.id
                     } else {
-                        let id = mode == .merge ? UUID() : group.id
-                        list.sections.append(TaskListSection(id: id, name: group.name))
-                        mapping[group.id] = id
+                        let id = mode == .merge ? UUID() : tag.id
+                        list.tags.append(TaskTag(id: id, name: tag.name))
+                        mapping[tag.id] = id
                     }
                 }
-                groupMap[incoming.id] = mapping
+                tagMap[incoming.id] = mapping
             }
             // Remap the entire repeat graph, including dangling keys, when appending a backup.
             let keys = Set(backup.tasks.flatMap { [$0.occurrenceKey, $0.successorKey].compactMap { $0 } })
@@ -299,9 +324,9 @@ enum BackupStore {
                 task.countedCompletion = incoming.countedCompletion
                 task.occurrenceKey = incoming.occurrenceKey.flatMap { keyMap[$0] }
                 task.successorKey = incoming.successorKey.flatMap { keyMap[$0] }
-                task.group = incoming.listID.flatMap { listMap[$0] }
-                if let listID = incoming.listID, let groupID = incoming.groupID {
-                    task.sectionID = groupMap[listID]?[groupID]
+                task.list = incoming.listID.flatMap { listMap[$0] }
+                if let listID = incoming.listID, let tagID = incoming.tagID {
+                    task.tagID = tagMap[listID]?[tagID]
                 }
                 task.subtasks = incoming.subtasks.map {
                     Subtask(id: mode == .merge ? UUID() : $0.id, title: $0.title, isComplete: $0.isComplete)

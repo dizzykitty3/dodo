@@ -151,7 +151,7 @@ struct SettingsView: View {
                             TaskDateBadge(day: "\(year)-11-04")
                         }
                     }
-                    if let title = listBadge.title(list: "Work", group: "Planning") {
+                    if let title = listBadge.title(list: "Work", tag: "Planning") {
                         ListBadge(title: title)
                     }
                 }

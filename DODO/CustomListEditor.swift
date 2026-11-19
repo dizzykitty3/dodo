@@ -44,7 +44,7 @@ enum ListCardIcon: String, CaseIterable {
     case running = "figure.run", sleep = "bed.double.fill", medicine = "pills.fill"
 }
 
-extension TaskGroup {
+extension TaskListRecord {
     var cardColor: ListCardColor { ListCardColor(rawValue: colorName) ?? .indigo }
     var cardIcon: ListCardIcon { ListCardIcon(rawValue: symbolName) ?? .list }
 }
@@ -52,34 +52,34 @@ extension TaskGroup {
 struct CustomListEditor: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: TaskGroup.displayOrder) private var groups: [TaskGroup]
-    let group: TaskGroup?
+    @Query(sort: TaskListRecord.displayOrder) private var lists: [TaskListRecord]
+    let list: TaskListRecord?
     @FocusState private var nameFocused: Bool
     @State private var name: String
     @State private var color: ListCardColor
     @State private var icon: ListCardIcon
     @State private var error: String?
 
-    @State private var sections: [TaskListSection]
-    @State private var originalSectionIDs: Set<UUID>
-    @State private var addingSection = false
-    @State private var editingSection: TaskListSection?
+    @State private var tags: [TaskTag]
+    @State private var originalTagIDs: Set<UUID>
+    @State private var addingTag = false
+    @State private var editingTag: TaskTag?
     @State private var confirmingDelete = false
     let onDelete: () -> Void
 
-    init(group: TaskGroup? = nil, onDelete: @escaping () -> Void = {}) {
+    init(list: TaskListRecord? = nil, onDelete: @escaping () -> Void = {}) {
         self.onDelete = onDelete
-        self.group = group
-        _sections = State(initialValue: group?.sections ?? [])
-        _originalSectionIDs = State(initialValue: Set(group?.sections.map(\.id) ?? []))
-        _name = State(initialValue: group?.name ?? "")
-        _color = State(initialValue: group?.cardColor ?? .indigo)
-        _icon = State(initialValue: group?.cardIcon ?? .list)
+        self.list = list
+        _tags = State(initialValue: list?.tags ?? [])
+        _originalTagIDs = State(initialValue: Set(list?.tags.map(\.id) ?? []))
+        _name = State(initialValue: list?.name ?? "")
+        _color = State(initialValue: list?.cardColor ?? .indigo)
+        _icon = State(initialValue: list?.cardIcon ?? .list)
     }
 
     private var hasChanges: Bool {
-        name != (group?.name ?? "") || color != (group?.cardColor ?? .indigo)
-            || icon != (group?.cardIcon ?? .list) || sections != (group?.sections ?? [])
+        name != (list?.name ?? "") || color != (list?.cardColor ?? .indigo)
+            || icon != (list?.cardIcon ?? .list) || tags != (list?.tags ?? [])
     }
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var duplicateName: Bool {
@@ -87,7 +87,7 @@ struct CustomListEditor: View {
             trimmedName.caseInsensitiveCompare(other.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame
         }
         return TaskList.builtIns.contains { matches($0.title) } ||
-            groups.contains { $0.persistentModelID != group?.persistentModelID && matches($0.name) }
+            lists.contains { $0.persistentModelID != list?.persistentModelID && matches($0.name) }
     }
     private var canSave: Bool { !trimmedName.isEmpty && !duplicateName }
 
@@ -149,24 +149,24 @@ struct CustomListEditor: View {
                 }
             }
             Section {
-                ForEach(sections) { section in
-                    Button(section.name) { editingSection = section }.foregroundStyle(.primary)
+                ForEach(tags) { tag in
+                    Button(tag.name) { editingTag = tag }.foregroundStyle(.primary)
                 }
-                    .onMove { sections.move(fromOffsets: $0, toOffset: $1) }
-                    .onDelete { sections.remove(atOffsets: $0) }
-                Button("New Group") { addingSection = true }.tint(.blue)
+                    .onMove { tags.move(fromOffsets: $0, toOffset: $1) }
+                    .onDelete { tags.remove(atOffsets: $0) }
+                Button("New Tag") { addingTag = true }.tint(.blue)
             } header: {
-                Text("Groups")
+                Text("Tags")
             } footer: {
-                if !sections.isEmpty { Text("Drag to reorder or swipe to delete. Tasks in a deleted group stay in this list.") }
+                if !tags.isEmpty { Text("Drag to reorder or swipe to delete. Tasks in a deleted tag stay in this list.") }
             }
-            if let group {
+            if let list {
                 Section {
                     Button("Delete List", role: .destructive) { confirmingDelete = true }
                         .confirmationDialog("Delete this list?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                             Button("Delete List", role: .destructive) {
                                 do {
-                                    try group.deleteKeepingTasks(in: context)
+                                    try list.deleteKeepingTasks(in: context)
                                     try context.save()
                                     dismiss()
                                     onDelete()
@@ -181,20 +181,20 @@ struct CustomListEditor: View {
                 }
             }
         }
-        .onAppear { if group == nil { nameFocused = true } }
-        .navigationTitle(group == nil ? "New List" : "Edit List")
-        .sheet(isPresented: $addingSection) {
-            TaskGroupEditor(sections: sections) { sections.append($0) }
+        .onAppear { if list == nil { nameFocused = true } }
+        .navigationTitle(list == nil ? "New List" : "Edit List")
+        .sheet(isPresented: $addingTag) {
+            TaskTagEditor(tags: tags) { tags.append($0) }
         }
-        .sheet(item: $editingSection) { section in
-            TaskGroupEditor(section: section, sections: sections) { edited in
-                if let index = sections.firstIndex(where: { $0.id == edited.id }) { sections[index] = edited }
+        .sheet(item: $editingTag) { tag in
+            TaskTagEditor(tag: tag, tags: tags) { edited in
+                if let index = tags.firstIndex(where: { $0.id == edited.id }) { tags[index] = edited }
             }
         }
         .confirmUnsavedChanges(hasChanges)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button(group == nil ? "Create" : "Save") { save() }.disabled(!canSave)
+                Button(list == nil ? "Create" : "Save") { save() }.disabled(!canSave)
             }
         }
         .alert("Couldn’t Save List", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
@@ -204,13 +204,13 @@ struct CustomListEditor: View {
 
     private func save() {
         guard canSave else { return }
-        let list = group ?? TaskGroup(name: trimmedName, position: (groups.last?.position ?? -1) + 1)
-        if group == nil { context.insert(list) }
+        let list = list ?? TaskListRecord(name: trimmedName, position: (lists.last?.position ?? -1) + 1)
+        if self.list == nil { context.insert(list) }
         list.name = trimmedName
         list.colorName = color.rawValue
         list.symbolName = icon.rawValue
         do {
-            try list.applySectionEdits(sections, originalIDs: originalSectionIDs, in: context)
+            try list.applyTagEdits(tags, originalIDs: originalTagIDs, in: context)
             try context.save()
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             dismiss()

@@ -5,9 +5,9 @@ struct ListsSettingsView: View {
     @Binding var sortScheduled: Bool
     @Binding var sortCompleted: Bool
     @Environment(\.modelContext) private var context
-    @Query(sort: TaskGroup.displayOrder) private var groups: [TaskGroup]
-    @State private var selection: TaskGroup?
-    @State private var editingGroup: TaskGroup?
+    @Query(sort: TaskListRecord.displayOrder) private var lists: [TaskListRecord]
+    @State private var selection: TaskListRecord?
+    @State private var editingList: TaskListRecord?
     @State private var creatingList = false
     @State private var deleting = false
     @State private var error: String?
@@ -23,13 +23,13 @@ struct ListsSettingsView: View {
                 Text("Lists show newly created tasks first by default.")
             }
             Section {
-                ForEach(groups) { group in
+                ForEach(lists) { list in
                     Button {
-                        editingGroup = group
+                        editingList = list
                     } label: {
                         HStack {
-                            Image(systemName: group.cardIcon.rawValue).foregroundStyle(group.cardColor.color)
-                            Text(group.name)
+                            Image(systemName: list.cardIcon.rawValue).foregroundStyle(list.cardColor.color)
+                            Text(list.name)
                             Spacer()
                             Image(systemName: "pencil").foregroundStyle(.secondary)
                         }
@@ -38,15 +38,15 @@ struct ListsSettingsView: View {
                     .buttonStyle(.plain)
                 }
                 .onMove { offsets, destination in
-                    var ordered = groups
+                    var ordered = lists
                     ordered.move(fromOffsets: offsets, toOffset: destination)
                     save {
-                        for (position, group) in ordered.enumerated() { group.position = position }
+                        for (position, list) in ordered.enumerated() { list.position = position }
                     }
                 }
                 .onDelete { offsets in
                     guard let index = offsets.first else { return }
-                    selection = groups[index]
+                    selection = lists[index]
                     deleting = true
                 }
                 Button("New List") { creatingList = true }
@@ -54,7 +54,7 @@ struct ListsSettingsView: View {
             } header: {
                 Text("Manage Lists")
             } footer: {
-                if groups.isEmpty {
+                if lists.isEmpty {
                     Text("Your custom task lists appear here. Tap New List to create one.")
                 } else {
                     Text("Tap a list to edit. Drag to reorder or swipe to delete.")
@@ -67,15 +67,15 @@ struct ListsSettingsView: View {
             NavigationStack { CustomListEditor() }
                 .confirmSheetDismissal()
         }
-        .sheet(item: $editingGroup) { group in
-            NavigationStack { CustomListEditor(group: group) }
+        .sheet(item: $editingList) { list in
+            NavigationStack { CustomListEditor(list: list) }
                 .confirmSheetDismissal()
         }
         .alert("Delete List?", isPresented: $deleting) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
-                guard let group = selection else { return }
-                save { try group.deleteKeepingTasks(in: context) }
+                guard let list = selection else { return }
+                save { try list.deleteKeepingTasks(in: context) }
                 selection = nil
             }
         } message: {

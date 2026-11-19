@@ -15,10 +15,10 @@ import Testing
     task.isUrgent = true
     task.link = URL(string: "https://example.com")
     task.subtasks = [Subtask(title: "First", isComplete: true), Subtask(title: "Second")]
-    let list = TaskGroup(name: "Home")
-    list.sections = [TaskListSection(name: "Morning")]
-    task.group = list
-    task.sectionID = list.sections[0].id
+    let list = TaskListRecord(name: "Home")
+    list.tags = [TaskTag(name: "Morning")]
+    task.list = list
+    task.tagID = list.tags[0].id
     context.insert(task)
     try context.save()
     try CompletedTaskCleanup.rollOver([task], now: now, context: context)
@@ -27,7 +27,7 @@ import Testing
     #expect(records.count == 2 && task.completedAt == now && task.countedCompletion)
     #expect(task.dueDay == "2026-11-15" && task.subtasks.allSatisfy(\.isComplete))
     #expect(next.dueDay == "2026-11-16" && next.title == task.title)
-    #expect(next.isUrgent && next.link == task.link && next.group === list && next.sectionID == task.sectionID)
+    #expect(next.isUrgent && next.link == task.link && next.list === list && next.tagID == task.tagID)
     #expect(next.subtasks.count == 2 && next.subtasks.allSatisfy { !$0.isComplete })
     #expect(next.occurrenceKey == task.successorKey)
     try CompletedTaskCleanup.rollOver(records, now: now, context: context)
@@ -173,7 +173,7 @@ import Testing
         yearly = try #require(context.fetch(FetchDescriptor<TaskRecord>()).first { $0.occurrenceKey == key })
         #expect(yearly.dueDay == day && yearly.repeatDay == 29)
     }
-    // Both new rule values must survive the existing v1 backup round trip.
+    // Both new rule values must survive the v2 backup round trip.
     let decoded = try DODOBackup.decode(BackupStore.snapshot(context: context).encoded())
     #expect(decoded.tasks.contains { $0.repeatRule == RepeatRule.biweekly.rawValue })
     #expect(decoded.tasks.contains { $0.repeatRule == RepeatRule.yearly.rawValue })

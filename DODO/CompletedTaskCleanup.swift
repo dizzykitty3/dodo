@@ -115,8 +115,8 @@ enum CompletedTaskCleanup {
         next.repeatWeekdays = record.repeatWeekdays
         next.repeatDay = (rule == .monthly || rule == .yearly) ? recurrenceDay(for: record, scheduled: scheduled ?? completion) : nil
         next.link = record.link
-        next.group = record.group
-        next.sectionID = record.sectionID
+        next.list = record.list
+        next.tagID = record.tagID
         next.isUrgent = record.isUrgent
         next.subtasks = record.subtasks.map { Subtask(title: $0.title) }
         context.insert(next)

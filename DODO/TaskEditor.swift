@@ -5,11 +5,11 @@ struct TaskEditor: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     let task: TaskRecord?
-    @Query(sort: TaskGroup.displayOrder) private var groups: [TaskGroup]
-    let presetGroup: TaskGroup?
-    let presetSectionID: UUID?
-    @State private var group: TaskGroup?
-    @State private var sectionID: UUID?
+    @Query(sort: TaskListRecord.displayOrder) private var lists: [TaskListRecord]
+    let presetList: TaskListRecord?
+    let presetTagID: UUID?
+    @State private var list: TaskListRecord?
+    @State private var tagID: UUID?
     let presetToday: Bool
     let presetUrgent: Bool
     @State private var initialDate: Date
@@ -32,11 +32,11 @@ struct TaskEditor: View {
     @State private var confirmingDelete = false
     @State private var errorMessage: String?
 
-    init(task: TaskRecord? = nil, presetToday: Bool = false, presetUrgent: Bool = false, presetGroup: TaskGroup? = nil, presetSectionID: UUID? = nil, onDelete: @escaping () -> Void = {}, onCreate: @escaping () -> Void = {}) {
-        self.presetSectionID = presetSectionID
-        _sectionID = State(initialValue: task?.sectionID ?? presetSectionID)
-        self.presetGroup = presetGroup
-        _group = State(initialValue: task?.group ?? presetGroup)
+    init(task: TaskRecord? = nil, presetToday: Bool = false, presetUrgent: Bool = false, presetList: TaskListRecord? = nil, presetTagID: UUID? = nil, onDelete: @escaping () -> Void = {}, onCreate: @escaping () -> Void = {}) {
+        self.presetTagID = presetTagID
+        _tagID = State(initialValue: task?.tagID ?? presetTagID)
+        self.presetList = presetList
+        _list = State(initialValue: task?.list ?? presetList)
         self.presetToday = presetToday
         self.presetUrgent = presetUrgent
         self.onDelete = onDelete
@@ -76,16 +76,16 @@ struct TaskEditor: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-                if !groups.isEmpty {
-                    Picker("List", selection: $group) {
-                        Text("None").tag(nil as TaskGroup?)
-                        ForEach(groups) { Text($0.name).tag(Optional($0)) }
+                if !lists.isEmpty {
+                    Picker("List", selection: $list) {
+                        Text("None").tag(nil as TaskListRecord?)
+                        ForEach(lists) { Text($0.name).tag(Optional($0)) }
                     }
                 }
-                if let group {
-                    Picker("Group", selection: $sectionID) {
+                if let list {
+                    Picker("Tag", selection: $tagID) {
                         Text("None").tag(nil as UUID?)
-                        ForEach(group.sections) { Text($0.name).tag(Optional($0.id)) }
+                        ForEach(list.tags) { Text($0.name).tag(Optional($0.id)) }
                     }
                 }
                 Toggle("Urgent", isOn: $urgent)
@@ -147,7 +147,7 @@ struct TaskEditor: View {
                     .foregroundStyle(.red)
             }
         }
-        .onChange(of: group) { sectionID = nil }
+        .onChange(of: list) { tagID = nil }
         .navigationTitle(task == nil ? "New Task" : "Edit Task")
         .confirmUnsavedChanges(hasChanges, pushed: task != nil, closeTitle: "Close")
         .toolbar {
@@ -171,7 +171,7 @@ struct TaskEditor: View {
     private var hasChanges: Bool {
         let originalRule = RepeatRule(rawValue: task?.repeatRule ?? "") ?? .never
         return title != Self.singleLine(task?.title ?? "") || linkText != (task?.link?.absoluteString ?? "")
-            || group != (task?.group ?? presetGroup) || sectionID != (task?.sectionID ?? presetSectionID)
+            || list != (task?.list ?? presetList) || tagID != (task?.tagID ?? presetTagID)
             || urgent != (task?.isUrgent ?? presetUrgent) || rule != originalRule
             || hasDate != initialHasDate
             || (hasDate && !Calendar.current.isDate(date, inSameDayAs: initialDate))
@@ -226,8 +226,8 @@ struct TaskEditor: View {
         } else {
             record.repeatDay = nil
         }
-        record.group = group
-        record.sectionID = group?.sections.first { $0.id == sectionID }?.id
+        record.list = list
+        record.tagID = list?.tags.first { $0.id == tagID }?.id
         record.isUrgent = urgent
         record.subtasks = subtasks.compactMap {
             var subtask = $0

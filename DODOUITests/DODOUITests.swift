@@ -130,7 +130,7 @@ final class DODOUITests: XCTestCase {
     }
 
     @MainActor
-    func testUnsavedGroupRequiresConfirmation() {
+    func testUnsavedTagRequiresConfirmation() {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-test-in-memory"]
         app.launch()
@@ -140,16 +140,16 @@ final class DODOUITests: XCTestCase {
         name.typeText("Projects\n")
         app.buttons["Create"].tap()
         app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "Projects")).firstMatch.tap()
-        app.buttons["New Group"].tap()
-        let groupName = app.textFields["Group name"]
-        XCTAssertTrue(groupName.waitForExistence(timeout: 5))
-        groupName.typeText("Planning")
+        app.buttons["New Tag"].tap()
+        let tagName = app.textFields["Tag name"]
+        XCTAssertTrue(tagName.waitForExistence(timeout: 5))
+        tagName.typeText("Planning")
         app.buttons["Cancel"].tap()
         app.buttons["Keep Editing"].tap()
-        XCTAssertEqual(groupName.value as? String, "Planning")
+        XCTAssertEqual(tagName.value as? String, "Planning")
         app.buttons["Cancel"].tap()
         app.buttons["Discard Changes"].tap()
-        XCTAssertTrue(app.navigationBars["New Group"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["New Tag"].waitForNonExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Planning"].exists)
     }
 

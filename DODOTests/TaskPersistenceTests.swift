@@ -16,12 +16,12 @@ import Testing
     do {
         let store = try openStore()
         let task = TaskRecord(title: "Weekly review")
-        let list = TaskGroup(name: "Projects")
-        let section = TaskListSection(name: "Planning")
-        list.sections = [section]
+        let list = TaskListRecord(name: "Projects")
+        let tag = TaskTag(name: "Planning")
+        list.tags = [tag]
         store.mainContext.insert(list)
-        task.group = list
-        task.sectionID = section.id
+        task.list = list
+        task.tagID = tag.id
         task.link = URL(string: "https://example.com/review")
         task.dueDay = "2026-11-09"
         task.repeatRule = RepeatRule.weekly.rawValue
@@ -37,9 +37,9 @@ import Testing
         #expect(task.dueDay == "2026-11-09" && task.isUrgent && task.repeatDay == 2)
         #expect(task.link?.absoluteString == "https://example.com/review")
         #expect(task.subtasks.first?.isComplete == true)
-        let list = try #require(task.group)
-        let section = try #require(list.sections.first)
-        #expect(section.name == "Planning" && task.sectionID == section.id)
+        let list = try #require(task.list)
+        let tag = try #require(list.tags.first)
+        #expect(tag.name == "Planning" && task.tagID == tag.id)
         try list.deleteKeepingTasks(in: store.mainContext)
         task.link = nil
         task.title = "Review"
@@ -50,7 +50,7 @@ import Testing
         let store = try openStore()
         let task = try #require(store.mainContext.fetch(FetchDescriptor<TaskRecord>()).first)
         #expect(task.title == "Review" && task.subtasks.isEmpty && task.link == nil)
-        #expect(task.group == nil && task.sectionID == nil)
+        #expect(task.list == nil && task.tagID == nil)
         store.mainContext.delete(task)
         try store.mainContext.save()
     }
@@ -149,28 +149,28 @@ import Testing
 }
 
 @MainActor
-@Test func editingGroupsReordersSurvivorsAndUngroupsOnlyAffectedTasks() throws {
+@Test func editingListsReordersSurvivorsAndUntagsOnlyAffectedTasks() throws {
     let store = try ModelContainer(for: TaskRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     let context = store.mainContext
-    let list = TaskGroup(name: "Work")
-    let sections = ["Inbox", "Planning", "Later"].map { TaskListSection(name: $0) }
-    list.sections = sections
+    let list = TaskListRecord(name: "Work")
+    let tags = ["Inbox", "Planning", "Later"].map { TaskTag(name: $0) }
+    list.tags = tags
     context.insert(list)
-    let tasks = sections.map { section in
-        let task = TaskRecord(title: section.name)
-        task.group = list
-        task.sectionID = section.id
+    let tasks = tags.map { tag in
+        let task = TaskRecord(title: tag.name)
+        task.list = list
+        task.tagID = tag.id
         context.insert(task)
         return task
     }
     tasks[0].completedAt = .now
     try context.save()
-    try list.applySectionEdits([sections[2], sections[1]], originalIDs: Set(sections.map(\.id)), in: context)
+    try list.applyTagEdits([tags[2], tags[1]], originalIDs: Set(tags.map(\.id)), in: context)
     try context.save()
-    #expect(list.sections.map(\.id) == [sections[2].id, sections[1].id])
+    #expect(list.tags.map(\.id) == [tags[2].id, tags[1].id])
     #expect(try context.fetchCount(FetchDescriptor<TaskRecord>()) == 3)
-    #expect(tasks[0].sectionID == nil && tasks[0].group == list && tasks[0].completedAt != nil)
-    #expect(tasks[1].sectionID == sections[1].id && tasks[2].sectionID == sections[2].id)
+    #expect(tasks[0].tagID == nil && tasks[0].list == list && tasks[0].completedAt != nil)
+    #expect(tasks[1].tagID == tags[1].id && tasks[2].tagID == tags[2].id)
 }
 
 @MainActor

@@ -30,8 +30,8 @@ final class TaskRecord {
     var deletedAt: Date?
     var restoredCompletion: Date?
     var countedCompletion = false
-    var group: TaskGroup?
-    var sectionID: UUID?
+    @Relationship(originalName: "group") var list: TaskListRecord?
+    @Attribute(originalName: "sectionID") var tagID: UUID?
     var subtasks: [Subtask] = []
 
     init(title: String) { self.title = title }
@@ -80,35 +80,35 @@ struct TaskListSection: Identifiable, Codable, Equatable {
 final class TaskGroup {
     var name: String
     var createdAt = Date.now
-    var sections: [TaskListSection] = []
+    @Attribute(originalName: "sections") var tags: [TaskTag] = []
     var colorName = "Indigo"
     var symbolName = "list.bullet"
     var position = 0
-    static var displayOrder: [SortDescriptor<TaskGroup>] {
-        [SortDescriptor(\TaskGroup.position), SortDescriptor(\TaskGroup.createdAt)]
+    static var displayOrder: [SortDescriptor<TaskListRecord>] {
+        [SortDescriptor(\TaskListRecord.position), SortDescriptor(\TaskListRecord.createdAt)]
     }
 
-    func applySectionEdits(_ draft: [TaskListSection], originalIDs: Set<UUID>, in context: ModelContext) throws {
-        let currentIDs = Set(sections.map(\.id))
+    func applyTagEdits(_ draft: [TaskTag], originalIDs: Set<UUID>, in context: ModelContext) throws {
+        let currentIDs = Set(tags.map(\.id))
         let removed = originalIDs.subtracting(draft.map(\.id))
-        let concurrentAdditions = sections.filter { !originalIDs.contains($0.id) }
+        let concurrentAdditions = tags.filter { !originalIDs.contains($0.id) }
         let ordered = draft.filter { !originalIDs.contains($0.id) || currentIDs.contains($0.id) }
         if !removed.isEmpty {
             let id = persistentModelID
-            let members = FetchDescriptor<TaskRecord>(predicate: #Predicate { $0.group?.persistentModelID == id })
+            let members = FetchDescriptor<TaskRecord>(predicate: #Predicate { $0.list?.persistentModelID == id })
             for task in try context.fetch(members) {
-                if let sectionID = task.sectionID, removed.contains(sectionID) { task.sectionID = nil }
+                if let tagID = task.tagID, removed.contains(tagID) { task.tagID = nil }
             }
         }
-        sections = ordered + concurrentAdditions
+        tags = ordered + concurrentAdditions
     }
 
     func deleteKeepingTasks(in context: ModelContext) throws {
         let id = persistentModelID
-        let members = FetchDescriptor<TaskRecord>(predicate: #Predicate { $0.group?.persistentModelID == id })
+        let members = FetchDescriptor<TaskRecord>(predicate: #Predicate { $0.list?.persistentModelID == id })
         for task in try context.fetch(members) {
-            task.sectionID = nil
-            task.group = nil
+            task.tagID = nil
+            task.list = nil
         }
         context.delete(self)
     }
@@ -118,3 +118,7 @@ final class TaskGroup {
         self.position = position
     }
 }
+
+// Legacy storage type names remain stable; application code uses list/tag terminology.
+typealias TaskListRecord = TaskGroup
+typealias TaskTag = TaskListSection

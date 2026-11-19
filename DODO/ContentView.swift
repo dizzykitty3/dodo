@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 enum TaskList: Hashable, Identifiable {
-    case today, urgent, completed, scheduled, all, inProgress, deleted, custom(TaskGroup)
+    case today, urgent, completed, scheduled, all, inProgress, deleted, custom(TaskListRecord)
 
     static let builtIns: [TaskList] = [.urgent, .today, .scheduled, .all, .inProgress, .completed, .deleted]
 
@@ -15,11 +15,11 @@ enum TaskList: Hashable, Identifiable {
         case .all: "All Tasks"
         case .inProgress: "In Progress"
         case .deleted: "Recently Deleted"
-        case .custom(let group): group.name
+        case .custom(let list): list.name
         }
     }
-    var group: TaskGroup? {
-        if case .custom(let group) = self { return group }
+    var list: TaskListRecord? {
+        if case .custom(let list) = self { return list }
         return nil
     }
     var hasPreview: Bool { self == .today || self == .urgent }
@@ -29,7 +29,7 @@ enum TaskList: Hashable, Identifiable {
     var color: Color {
         switch self {
         case .deleted: Color.gray
-        case .custom(let group): group.cardColor.color
+        case .custom(let list): list.cardColor.color
         case .inProgress: Color(red: 0.30, green: 0.49, blue: 0.48)
         case .all: Color(red: 0.37, green: 0.39, blue: 0.44)
         case .today: Color(red: 0.35, green: 0.56, blue: 0.72)
@@ -43,7 +43,7 @@ enum TaskList: Hashable, Identifiable {
     var symbol: String {
         switch self {
         case .deleted: "trash"
-        case .custom(let group): group.cardIcon.rawValue
+        case .custom(let list): list.cardIcon.rawValue
         case .all: "tray.full.fill"
         case .inProgress: "circle.lefthalf.filled"
         case .today: "sun.max.fill"
@@ -55,7 +55,7 @@ enum TaskList: Hashable, Identifiable {
 }
 
 private enum Panel: Identifiable, Hashable {
-    case search(TaskList), settings, compose(TaskList?, sectionID: UUID? = nil), newList, editList(TaskGroup)
+    case search(TaskList), settings, compose(TaskList?, tagID: UUID? = nil), newList, editList(TaskListRecord)
 
     var isSearch: Bool {
         if case .search = self { return true }
@@ -94,7 +94,7 @@ struct ContentView: View {
     @AppStorage("todayPreviewLimit") private var todayPreviewLimit = 5
     @Query(sort: \TaskRecord.createdAt, order: .reverse) private var tasks: [TaskRecord]
     @AppStorage("urgentPreviewLimit") private var urgentPreviewLimit = 5
-    @Query(sort: TaskGroup.displayOrder) private var groups: [TaskGroup]
+    @Query(sort: TaskListRecord.displayOrder) private var lists: [TaskListRecord]
     @State private var storageError: String?
     @State private var panel: Panel?
     @Environment(\.modelContext) private var context
@@ -115,7 +115,7 @@ struct ContentView: View {
                     card(.today)
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())], spacing: 12) {
                         card(.scheduled)
-                        ForEach(groups) { card(.custom($0)) }
+                        ForEach(lists) { card(.custom($0)) }
                         newListCard
                     }
                     card(.all)
@@ -146,13 +146,13 @@ struct ContentView: View {
                     .toolbar {
                         ToolbarItemGroup(placement: .topBarTrailing) {
                             searchButton(from: list)
-                            if let group = list.group {
-                                Button("Edit List", systemImage: "pencil") { panel = .editList(group) }
+                            if let customList = list.list {
+                                Button("Edit List", systemImage: "pencil") { panel = .editList(customList) }
                                     .labelStyle(.iconOnly)
                             }
                         }
-                        if let group = list.group {
-                            ToolbarItem(placement: .bottomBar) { NewTaskGroupButton(list: group) }
+                        if let customList = list.list {
+                            ToolbarItem(placement: .bottomBar) { NewTaskTagButton(list: customList) }
                         }
                         if list.canCreateTask { composeToolbar(from: list) }
                     }
@@ -197,8 +197,8 @@ struct ContentView: View {
                             .toolbar { sheetCloseButton }
                     case .newList:
                         CustomListEditor()
-                    case .editList(let group):
-                        CustomListEditor(group: group) { path = NavigationPath() }
+                    case .editList(let list):
+                        CustomListEditor(list: list) { path = NavigationPath() }
                     case .settings:
                         SettingsView(previewLimit: $todayPreviewLimit, urgentPreviewLimit: $urgentPreviewLimit,
                                      hideUndatedFromTodayPreview: $hideUndatedFromTodayPreview,
@@ -209,9 +209,9 @@ struct ContentView: View {
                                          pendingRemoval = [:]
                                      })
                             .toolbar { sheetCloseButton }
-                    case .compose(let composeSource, let sectionID):
+                    case .compose(let composeSource, let tagID):
                         TaskEditor(presetToday: composeSource == .today, presetUrgent: composeSource == .urgent,
-                                   presetGroup: composeSource?.group, presetSectionID: sectionID, onCreate: { didCreateTask = true })
+                                   presetList: composeSource?.list, presetTagID: tagID, onCreate: { didCreateTask = true })
                     }
                 }
             }
@@ -350,19 +350,19 @@ struct ContentView: View {
                     dateSectionDivider
                 }
                 daySection("No Date", undated)
-            } else if let group = list.group {
-                let grouped = Dictionary(grouping: records, by: \.sectionID)
+            } else if let customList = list.list {
+                let tasksByTag = Dictionary(grouping: records, by: \.tagID)
                 Section {
-                    rows(grouped[nil] ?? [], showsCheckbox: true)
-                    Button("New Task") { panel = .compose(list, sectionID: nil) }
+                    rows(tasksByTag[nil] ?? [], showsCheckbox: true)
+                    Button("New Task") { panel = .compose(list, tagID: nil) }
                         .tint(.blue)
                 } header: {
-                    Text("Ungrouped")
+                    Text("Untagged")
                 }
-                ForEach(group.sections) { section in
-                    Section(section.name) {
-                        rows(grouped[section.id] ?? [], showsCheckbox: true)
-                        Button("New Task") { panel = .compose(list, sectionID: section.id) }
+                ForEach(customList.tags) { tag in
+                    Section(tag.name) {
+                        rows(tasksByTag[tag.id] ?? [], showsCheckbox: true)
+                        Button("New Task") { panel = .compose(list, tagID: tag.id) }
                             .tint(.blue)
                     }
                 }
@@ -374,9 +374,9 @@ struct ContentView: View {
                 rows(records, showsCheckbox: true)
             }
         }
-        .environment(\.showsTaskListBadge, list.group == nil)
+        .environment(\.showsTaskListBadge, list.list == nil)
         .overlay {
-            if records.isEmpty && list.group == nil {
+            if records.isEmpty && list.list == nil {
                 if list.canCreateTask {
                     ContentUnavailableView("No Tasks", systemImage: list.symbol,
                                            description: Text("Tap the compose button in the bottom-right corner to create a task."))
@@ -467,7 +467,7 @@ struct ContentView: View {
             case .today: return task.dueDay.map { $0 <= today } ?? true
             case .urgent: return task.isUrgent
             case .scheduled: return task.dueDay != nil
-            case .custom(let group): return task.group == group
+            case .custom(let list): return task.list == list
             case .completed, .deleted: return false
             }
         }
@@ -688,16 +688,16 @@ private struct TaskBadges: View {
 
 #Preview { ContentView().modelContainer(for: [TaskRecord.self, CompletionArchive.self], inMemory: true) }
 
-private struct NewTaskGroupButton: View {
+private struct NewTaskTagButton: View {
     @Environment(\.modelContext) private var context
-    let list: TaskGroup
+    let list: TaskListRecord
     @State private var creating = false
 
     var body: some View {
-        Button("New Group") { creating = true }
+        Button("New Tag") { creating = true }
             .sheet(isPresented: $creating) {
-                TaskGroupEditor(sections: list.sections) { section in
-                    list.sections.append(section)
+                TaskTagEditor(tags: list.tags) { tag in
+                    list.tags.append(tag)
                     do { try context.save() }
                     catch { context.rollback(); throw error }
                 }
