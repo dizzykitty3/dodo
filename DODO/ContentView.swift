@@ -399,20 +399,22 @@ struct ContentView: View {
     private func rows(_ records: [TaskRecord], showsCheckbox: Bool) -> some View {
         ForEach(records) { record in
             if record.deletedAt != nil {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        TaskTitle(title: record.title)
-                        TaskBadges(record: record)
-                        Spacer()
-                        Button("Restore") {
-                            record.restoredCompletion = record.completedAt
-                            record.deletedAt = nil
-                            do { try context.save(); showToast("Task restored") }
-                            catch { context.rollback(); storageError = error.localizedDescription }
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            TaskTitle(title: record.title)
+                            TaskBadges(record: record)
                         }
-                        .buttonStyle(.glass)
+                        TaskListDetails(record: record, badgeTitle: listBadge.title(for: record))
                     }
-                    TaskListDetails(record: record, badgeTitle: listBadge.title(for: record))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Button("Restore") {
+                        record.restoredCompletion = record.completedAt
+                        record.deletedAt = nil
+                        do { try context.save(); showToast("Task restored") }
+                        catch { context.rollback(); storageError = error.localizedDescription }
+                    }
+                    .buttonStyle(.glass)
                 }
             } else {
                 CompletionRow(record: record, onDelete: { showToast("Task deleted") },
@@ -565,19 +567,36 @@ private struct CompletionRow: View {
                     .disabled(!record.subtasks.isEmpty)
                     .accessibilityLabel(completed ? "Restore " + record.title : "Complete " + record.title)
                 }
-                VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .center, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        NavigationLink {
+                            TaskEditor(task: record, onDelete: onDelete)
+                        } label: {
+                            HStack {
+                                TaskTitle(title: record.title).strikethrough(completed)
+                                TaskBadges(record: record)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .foregroundStyle(completed ? .secondary : .primary)
+                        }
+                        .buttonStyle(.plain)
+                        if record.link != nil || badgeTitle != nil {
+                            TaskListDetails(record: record, badgeTitle: badgeTitle)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     NavigationLink {
                         TaskEditor(task: record, onDelete: onDelete)
                     } label: {
-                        HStack {
-                            TaskTitle(title: record.title).strikethrough(completed)
-                            TaskBadges(record: record)
-                        }
-                        .foregroundStyle(completed ? .secondary : .primary)
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 24, height: 44)
+                            .contentShape(Rectangle())
                     }
-                    if record.link != nil || badgeTitle != nil {
-                        TaskListDetails(record: record, badgeTitle: badgeTitle)
-                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Edit " + record.title)
                 }
             }
             if let toggle {
@@ -598,6 +617,7 @@ private struct CompletionRow: View {
                 }
             }
         }
+        .navigationLinkIndicatorVisibility(.hidden)
         .listRowInsets(.vertical, 4)
         .alert("Couldn’t update task", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
