@@ -106,6 +106,7 @@ struct ContentView: View {
     @State private var toastID: UUID?
     @State private var query = ""
     @State private var path = NavigationPath()
+    @State private var sheetPath = NavigationPath()
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -138,6 +139,9 @@ struct ContentView: View {
                         .labelStyle(.iconOnly)
                 }
                 composeToolbar(from: nil)
+            }
+            .navigationDestination(for: TaskRecord.self) { record in
+                TaskEditor(task: record, onDelete: { showToast("Task deleted") })
             }
             .navigationDestination(for: TaskList.self) { list in
                 taskRows(in: list)
@@ -186,7 +190,7 @@ struct ContentView: View {
             toastID = nil
         }
         .sheet(item: $panel, onDismiss: finishCompose) { selected in
-            NavigationStack {
+            NavigationStack(path: $sheetPath) {
                 Group {
                     switch selected {
                     case .search(let source):
@@ -214,6 +218,9 @@ struct ContentView: View {
                                    presetList: composeSource?.list, presetTagID: tagID, onCreate: { didCreateTask = true })
                     }
                 }
+                .navigationDestination(for: TaskRecord.self) { record in
+                    TaskEditor(task: record, onDelete: { showToast("Task deleted") })
+                }
             }
             .overlay { if selected.isSearch { toastPill } }
             .confirmSheetDismissal()
@@ -228,6 +235,7 @@ struct ContentView: View {
     }
 
     private func finishCompose() {
+        sheetPath = NavigationPath()
         if didCreateTask {
             didCreateTask = false
             showToast("Task saved")
@@ -417,7 +425,10 @@ struct ContentView: View {
                     .buttonStyle(.glass)
                 }
             } else {
-                CompletionRow(record: record, onDelete: { showToast("Task deleted") },
+                CompletionRow(record: record, onEdit: {
+                    if panel?.isSearch == true { sheetPath.append(record) }
+                    else { path.append(record) }
+                },
                               toggle: showsCheckbox ? { child in try toggleCompletion(record, child: child) } : nil)
             }
         }
@@ -544,7 +555,7 @@ private struct CompletionRow: View {
     @Environment(\.showsTaskListBadge) private var showsTaskListBadge
     private var listBadge = ListBadgePreferences()
     let record: TaskRecord
-    let onDelete: () -> Void
+    let onEdit: () -> Void
     let toggle: ((UUID?) throws -> Void)?
     @State private var errorMessage: String?
 
@@ -569,9 +580,7 @@ private struct CompletionRow: View {
                 }
                 HStack(alignment: .center, spacing: 6) {
                     VStack(alignment: .leading, spacing: 0) {
-                        NavigationLink {
-                            TaskEditor(task: record, onDelete: onDelete)
-                        } label: {
+                        Button(action: onEdit) {
                             HStack {
                                 TaskTitle(title: record.title).strikethrough(completed)
                                 TaskBadges(record: record)
@@ -586,9 +595,7 @@ private struct CompletionRow: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    NavigationLink {
-                        TaskEditor(task: record, onDelete: onDelete)
-                    } label: {
+                    Button(action: onEdit) {
                         Image(systemName: "chevron.right")
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.tertiary)
@@ -617,7 +624,6 @@ private struct CompletionRow: View {
                 }
             }
         }
-        .navigationLinkIndicatorVisibility(.hidden)
         .listRowInsets(.vertical, 4)
         .alert("Couldn’t update task", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
