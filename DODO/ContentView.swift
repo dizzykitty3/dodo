@@ -149,6 +149,12 @@ struct ContentView: View {
                     .toolbar(.visible, for: .navigationBar)
                     .toolbar {
                         ToolbarItemGroup(placement: .topBarTrailing) {
+                            if list == .completed || list == .deleted {
+                                BulkTaskActions(permanently: list == .deleted) { message in
+                                    pendingRemoval = [:]
+                                    showToast(message)
+                                }
+                            }
                             searchButton(from: list)
                             if let customList = list.list {
                                 Button("Edit List", systemImage: "pencil") { panel = .editList(customList) }

@@ -40,6 +40,28 @@ final class CompletionArchive {
 
 @MainActor
 enum CompletedTaskCleanup {
+    static func deleteAll(permanently: Bool, context: ModelContext, now: Date = .now) throws -> Int {
+        let descriptor = permanently
+            ? FetchDescriptor<TaskRecord>(predicate: #Predicate { $0.deletedAt != nil })
+            : FetchDescriptor<TaskRecord>(predicate: #Predicate { $0.completedAt != nil && $0.deletedAt == nil })
+        let records = try context.fetch(descriptor)
+        guard !records.isEmpty else { return 0 }
+        do {
+            if permanently {
+                let count = records.filter(\.countedCompletion).count
+                if count > 0 { context.insert(CompletionArchive(count: count)) }
+                for record in records { context.delete(record) }
+            } else {
+                for record in records { record.deletedAt = now }
+            }
+            try context.save()
+            return records.count
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
     static func apply(_ records: [TaskRecord], policy: CleanupPolicy, now: Date, context: ModelContext) throws {
         let expired = records.filter { policy.deadline(for: $0).map { $0 <= now } ?? false }
         guard !expired.isEmpty else { return }
