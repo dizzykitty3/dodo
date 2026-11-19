@@ -517,7 +517,7 @@ struct ContentView: View {
                 NavigationLink(value: list) {
                     VStack(alignment: .leading, spacing: 14) {
                         HStack(alignment: .center) {
-                            Image(systemName: list.symbol).font(.title3.weight(.semibold))
+                            ListSymbol(name: list.symbol).font(.title3.weight(.semibold))
                             if list.hasPreview { Text(list.title).font(.title2.bold()) }
                             if list.isCompact { Text(list.title).font(.headline) }
                             Spacer(minLength: 2)

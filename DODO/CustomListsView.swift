@@ -28,7 +28,7 @@ struct ListsSettingsView: View {
                         editingList = list
                     } label: {
                         HStack {
-                            Image(systemName: list.cardIcon.rawValue).foregroundStyle(list.cardColor.color)
+                            ListSymbol(name: list.cardIcon.rawValue).foregroundStyle(list.cardColor.color)
                             Text(list.name)
                             Spacer()
                             Image(systemName: "pencil").foregroundStyle(.secondary)
