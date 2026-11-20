@@ -109,7 +109,7 @@ struct CustomListEditor: View {
                 TextField("List name", text: $name)
                     .focused($nameFocused)
                     .submitLabel(.done)
-                    .onSubmit { nameFocused = false }
+                    .onSubmit { save() }
             } header: {
                 Text("Title")
             } footer: {
