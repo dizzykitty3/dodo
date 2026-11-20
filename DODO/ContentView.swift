@@ -97,6 +97,7 @@ struct ContentView: View {
     @Query(sort: TaskListRecord.displayOrder) private var lists: [TaskListRecord]
     @State private var storageError: String?
     @State private var panel: Panel?
+    @State private var panelSessionID = UUID()
     @Environment(\.modelContext) private var context
     @AppStorage("sortScheduledByDate") private var sortScheduled = true
     @AppStorage("sortCompletedByDate") private var sortCompleted = true
@@ -135,7 +136,7 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     searchButton(from: .all)
-                    Button("Settings", systemImage: "gearshape") { panel = .settings }
+                    Button("Settings", systemImage: "gearshape") { present(.settings) }
                         .labelStyle(.iconOnly)
                 }
                 composeToolbar(from: nil)
@@ -157,7 +158,7 @@ struct ContentView: View {
                             }
                             searchButton(from: list)
                             if let customList = list.list {
-                                Button("Edit List", systemImage: "pencil") { panel = .editList(customList) }
+                                Button("Edit List", systemImage: "pencil") { present(.editList(customList)) }
                                     .labelStyle(.iconOnly)
                             }
                         }
@@ -228,10 +229,17 @@ struct ContentView: View {
                     TaskEditor(task: record, onDelete: { showToast("Task deleted") })
                 }
             }
+            .id(panelSessionID)
             .overlay { if selected.isSearch { toastPill } }
             .confirmSheetDismissal()
             .presentationDetents([.large])
         }
+    }
+
+    private func present(_ selection: Panel) {
+        // A presentation owns its draft; reopening must not reuse the previous form state.
+        panelSessionID = UUID()
+        panel = selection
     }
 
     private var sheetCloseButton: some ToolbarContent {
@@ -253,7 +261,7 @@ struct ContentView: View {
         ToolbarSpacer(.flexible, placement: .bottomBar)
         ToolbarItem(placement: .bottomBar) {
             Button("New Task", systemImage: "square.and.pencil") {
-                panel = .compose(source)
+                present(.compose(source))
             }
             .labelStyle(.iconOnly)
         }
@@ -280,7 +288,7 @@ struct ContentView: View {
     private func searchButton(from source: TaskList) -> some View {
         Button("Search", systemImage: "magnifyingglass") {
             query = ""
-            panel = .search(source)
+            present(.search(source))
         }
         .labelStyle(.iconOnly)
     }
@@ -368,7 +376,7 @@ struct ContentView: View {
                 let tasksByTag = Dictionary(grouping: records, by: \.tagID)
                 Section {
                     rows(tasksByTag[nil] ?? [], showsCheckbox: true)
-                    Button("New Task") { panel = .compose(list, tagID: nil) }
+                    Button("New Task") { present(.compose(list, tagID: nil)) }
                         .tint(.blue)
                 } header: {
                     Text("Untagged")
@@ -376,7 +384,7 @@ struct ContentView: View {
                 ForEach(customList.tags) { tag in
                     Section(tag.name) {
                         rows(tasksByTag[tag.id] ?? [], showsCheckbox: true)
-                        Button("New Task") { panel = .compose(list, tagID: tag.id) }
+                        Button("New Task") { present(.compose(list, tagID: tag.id)) }
                             .tint(.blue)
                     }
                 }
@@ -491,7 +499,7 @@ struct ContentView: View {
     }
 
     private var newListCard: some View {
-        Button { panel = .newList } label: {
+        Button { present(.newList) } label: {
             VStack(alignment: .leading, spacing: 14) {
                 Image(systemName: "plus")
                     .font(.title.bold())
@@ -704,15 +712,20 @@ private struct NewTaskTagButton: View {
     @Environment(\.modelContext) private var context
     let list: TaskListRecord
     @State private var creating = false
+    @State private var sessionID = UUID()
 
     var body: some View {
-        Button("New Tag") { creating = true }
+        Button("New Tag") {
+            sessionID = UUID()
+            creating = true
+        }
             .sheet(isPresented: $creating) {
                 TaskTagEditor(tags: list.tags) { tag in
                     list.tags.append(tag)
                     do { try context.save() }
                     catch { context.rollback(); throw error }
                 }
+                .id(sessionID)
             }
     }
 }

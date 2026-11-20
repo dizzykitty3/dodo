@@ -63,6 +63,7 @@ struct CustomListEditor: View {
     @State private var tags: [TaskTag]
     @State private var originalTagIDs: Set<UUID>
     @State private var addingTag = false
+    @State private var tagSessionID = UUID()
     @State private var editingTag: TaskTag?
     @State private var confirmingDelete = false
     let onDelete: () -> Void
@@ -154,7 +155,10 @@ struct CustomListEditor: View {
                 }
                     .onMove { tags.move(fromOffsets: $0, toOffset: $1) }
                     .onDelete { tags.remove(atOffsets: $0) }
-                Button("New Tag") { addingTag = true }.tint(.blue)
+                Button("New Tag") {
+                    tagSessionID = UUID()
+                    addingTag = true
+                }.tint(.blue)
             } header: {
                 Text("Tags")
             } footer: {
@@ -185,6 +189,7 @@ struct CustomListEditor: View {
         .navigationTitle(list == nil ? "New List" : "Edit List")
         .sheet(isPresented: $addingTag) {
             TaskTagEditor(tags: tags) { tags.append($0) }
+                .id(tagSessionID)
         }
         .sheet(item: $editingTag) { tag in
             TaskTagEditor(tag: tag, tags: tags) { edited in

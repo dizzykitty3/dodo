@@ -9,6 +9,7 @@ struct ListsSettingsView: View {
     @State private var selection: TaskListRecord?
     @State private var editingList: TaskListRecord?
     @State private var creatingList = false
+    @State private var listSessionID = UUID()
     @State private var deleting = false
     @State private var error: String?
 
@@ -49,7 +50,10 @@ struct ListsSettingsView: View {
                     selection = lists[index]
                     deleting = true
                 }
-                Button("New List") { creatingList = true }
+                Button("New List") {
+                    listSessionID = UUID()
+                    creatingList = true
+                }
                     .tint(.blue)
             } header: {
                 Text("Manage Lists")
@@ -65,6 +69,7 @@ struct ListsSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $creatingList) {
             NavigationStack { CustomListEditor() }
+                .id(listSessionID)
                 .confirmSheetDismissal()
         }
         .sheet(item: $editingList) { list in
