@@ -19,6 +19,8 @@ struct TaskEditor: View {
 
     @State private var linkText: String
     @State private var titleFocusRequest = 0
+    @State private var titleBlurRequest = 0
+    @State private var titleFrame = CGRect.zero
     @State private var title: String
     @State private var hasDate: Bool
     @State private var date: Date
@@ -61,7 +63,8 @@ struct TaskEditor: View {
     var body: some View {
         Form {
             Section("Task") {
-                TaskTitleInput(text: $title, focusOnAppearance: task == nil, focusRequest: titleFocusRequest, submit: save)
+                TaskTitleInput(text: $title, focusOnAppearance: task == nil, blurRequest: titleBlurRequest, focusRequest: titleFocusRequest, submit: save)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("taskForm")) } action: { titleFrame = $0 }
                     .contentShape(Rectangle())
                     .simultaneousGesture(TapGesture().onEnded { titleFocusRequest += 1 })
                     .overlay(alignment: .topLeading) {
@@ -136,6 +139,11 @@ struct TaskEditor: View {
                     .foregroundStyle(.red)
             }
         }
+        .coordinateSpace(name: "taskForm")
+        .simultaneousGesture(SpatialTapGesture(coordinateSpace: .named("taskForm")).onEnded { event in
+            if !titleFrame.contains(event.location) { titleBlurRequest += 1 }
+        })
+        .scrollDismissesKeyboard(.interactively)
         .onChange(of: list) { tagID = nil }
         .navigationTitle(task == nil ? "New Task" : "Edit Task")
         .confirmUnsavedChanges(hasChanges, pushed: task != nil, closeTitle: "Close")

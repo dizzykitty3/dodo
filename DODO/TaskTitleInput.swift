@@ -4,12 +4,14 @@ import UIKit
 struct TaskTitleInput: UIViewRepresentable {
     @Binding var text: String
     let focusOnAppearance: Bool
+    let blurRequest: Int
     let focusRequest: Int
     let submit: () -> Void
 
     final class Input: UITextView {
         var initiallyFocused = false
 
+        var handledBlurRequest = 0
         var handledFocusRequest = 0
 
         override func didMoveToWindow() {
@@ -41,6 +43,10 @@ struct TaskTitleInput: UIViewRepresentable {
 
     func updateUIView(_ view: Input, context: Context) {
         context.coordinator.input = self
+        if view.handledBlurRequest != blurRequest {
+            view.handledBlurRequest = blurRequest
+            view.resignFirstResponder()
+        }
         if view.handledFocusRequest != focusRequest {
             view.handledFocusRequest = focusRequest
             view.becomeFirstResponder()

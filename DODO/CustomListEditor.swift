@@ -55,6 +55,7 @@ struct CustomListEditor: View {
     @Query(sort: TaskListRecord.displayOrder) private var lists: [TaskListRecord]
     let list: TaskListRecord?
     @FocusState private var nameFocused: Bool
+    @State private var titleFrame = CGRect.zero
     @State private var name: String
     @State private var color: ListCardColor
     @State private var icon: ListCardIcon
@@ -109,6 +110,7 @@ struct CustomListEditor: View {
             Section {
                 TextField("List name", text: $name)
                     .focused($nameFocused)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("listForm")) } action: { titleFrame = $0 }
                     .submitLabel(.done)
                     .onSubmit { save() }
             } header: {
@@ -185,6 +187,11 @@ struct CustomListEditor: View {
                 }
             }
         }
+        .coordinateSpace(name: "listForm")
+        .simultaneousGesture(SpatialTapGesture(coordinateSpace: .named("listForm")).onEnded { event in
+            if !titleFrame.contains(event.location) { nameFocused = false }
+        })
+        .scrollDismissesKeyboard(.interactively)
         .onAppear { if list == nil { nameFocused = true } }
         .navigationTitle(list == nil ? "New List" : "Edit List")
         .sheet(isPresented: $addingTag) {
