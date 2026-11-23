@@ -9,7 +9,10 @@ enum RepeatRule: String, CaseIterable {
 struct Subtask: Codable, Identifiable, Equatable {
     var id = UUID()
     var title = ""
-    var isComplete = false
+    var isComplete = false {
+        didSet { if isComplete != oldValue { completedAt = isComplete ? .now : nil } }
+    }
+    var completedAt: Date?
 }
 
 @Model

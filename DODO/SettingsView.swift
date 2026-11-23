@@ -9,6 +9,10 @@ struct SettingsView: View {
     @AppStorage("completedCleanupInterval") private var cleanupInterval = CleanupInterval.never
     @AppStorage("trashRetention") private var trashRetention = TrashRetention.sevenDays
     @AppStorage("newTasksDueToday") private var newTasksDueToday = false
+    @AppStorage("todayHideOlderCompletedSubtasks") private var hideOlderCompletedSubtasks = false
+    @AppStorage("todayHideOldOverdue") private var hideOldOverdue = false
+    @AppStorage("todayOverdueDays") private var overdueDays = 30
+    @AppStorage("todayBeforeOverdue") private var todayBeforeOverdue = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var listBadge = ListBadgePreferences()
     var dateBadge = DateBadgePreferences()
@@ -91,7 +95,18 @@ struct SettingsView: View {
                 previewLimitPicker($previewLimit)
                 Toggle("Hide Tasks Without a Date", isOn: $hideUndatedFromTodayPreview)
             }
-
+            Section {
+                Toggle("Keep Only the Latest Completed Subtask", isOn: $hideOlderCompletedSubtasks)
+                Toggle("Hide Older Overdue Tasks", isOn: $hideOldOverdue)
+                if hideOldOverdue {
+                    Stepper("Older Than \(overdueDays) Days", value: $overdueDays, in: 1...3650)
+                }
+                Toggle("Show Today Before Overdue", isOn: $todayBeforeOverdue)
+            } header: {
+                Text("Today Page")
+            } footer: {
+                Text("Unfinished subtasks stay visible. Hidden overdue tasks remain in other lists.")
+            }
         }
         .navigationTitle("Home Screen")
         .navigationBarTitleDisplayMode(.inline)

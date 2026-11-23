@@ -78,6 +78,10 @@ struct ContentView: View {
         let revision: Int
     }
 
+    @AppStorage("todayHideOlderCompletedSubtasks") private var hideOlderCompletedSubtasks = false
+    @AppStorage("todayHideOldOverdue") private var hideOldOverdue = false
+    @AppStorage("todayOverdueDays") private var overdueDays = 30
+    @AppStorage("todayBeforeOverdue") private var todayBeforeOverdue = false
     @State private var clockRevision = 0
 
     private var cleanupSchedule: CleanupSchedule {
@@ -359,15 +363,24 @@ struct ContentView: View {
     }
 
     private func taskRows(in list: TaskList) -> some View {
-        let records = items(list, includePending: true)
+        let cutoff = Calendar.current.date(byAdding: .day, value: -max(1, min(overdueDays, 3650)), to: .now)!
+            .formatted(TaskRecord.dayFormat)
+        let records = items(list, includePending: true).filter { record in
+            list != .today || !hideOldOverdue || record.dueDay.map { $0 >= cutoff } ?? true
+        }
         return List {
             if list == .today {
                 let today = Date.now.formatted(TaskRecord.dayFormat)
                 let overdue = records.filter { $0.dueDay.map { $0 < today } ?? false }
                 let dueToday = records.filter { $0.dueDay == today }
                 let undated = records.filter { $0.dueDay == nil }
-                daySection("Overdue", overdue)
-                daySection("Today", dueToday)
+                if todayBeforeOverdue {
+                    daySection("Today", dueToday)
+                    daySection("Overdue", overdue)
+                } else {
+                    daySection("Overdue", overdue)
+                    daySection("Today", dueToday)
+                }
                 if (!overdue.isEmpty || !dueToday.isEmpty) && !undated.isEmpty {
                     dateSectionDivider
                 }
@@ -396,6 +409,7 @@ struct ContentView: View {
                 rows(records, showsCheckbox: true)
             }
         }
+        .environment(\.hidesOlderCompletedSubtasks, list == .today && hideOlderCompletedSubtasks)
         .environment(\.showsTaskListBadge, list.list == nil)
         .overlay {
             if records.isEmpty && list.list == nil {
@@ -563,15 +577,29 @@ private let taskCheckboxWidth: CGFloat = 44
 
 private extension EnvironmentValues {
     @Entry var showsTaskListBadge = true
+    @Entry var hidesOlderCompletedSubtasks = false
 }
 
 private struct CompletionRow: View {
     @Environment(\.showsTaskListBadge) private var showsTaskListBadge
+    @Environment(\.hidesOlderCompletedSubtasks) private var hidesOlderCompletedSubtasks
     private var listBadge = ListBadgePreferences()
     let record: TaskRecord
     let onEdit: () -> Void
     let toggle: ((UUID?) throws -> Void)?
     @State private var errorMessage: String?
+
+    private var visibleSubtasks: [Subtask] {
+        let children = record.displayedSubtasks
+        guard hidesOlderCompletedSubtasks else { return children }
+        // Legacy subtasks have no completion timestamp; use their list order as a stable fallback.
+        let latest = children.filter(\.isComplete).enumerated().max {
+            let lhs = $0.element.completedAt ?? .distantPast
+            let rhs = $1.element.completedAt ?? .distantPast
+            return lhs == rhs ? $0.offset < $1.offset : lhs < rhs
+        }?.element.id
+        return children.filter { !$0.isComplete || $0.id == latest }
+    }
 
     var body: some View {
         let completed = record.completedAt != nil
@@ -621,7 +649,7 @@ private struct CompletionRow: View {
                 }
             }
             if let toggle {
-                ForEach(record.displayedSubtasks) { child in
+                ForEach(visibleSubtasks) { child in
                     Button {
                         do { try toggle(child.id) } catch { errorMessage = error.localizedDescription }
                     } label: {

@@ -11,6 +11,10 @@ enum BackupError: LocalizedError {
 struct BackupPreferences: Codable {
     // Older v1 backups omit this preference; replacement restores the default of false.
     var newTasksDueToday: Bool?
+    var todayHideOlderCompletedSubtasks: Bool?
+    var todayHideOldOverdue: Bool?
+    var todayOverdueDays: Int?
+    var todayBeforeOverdue: Bool?
     var todayPreviewLimit: Int
     var urgentPreviewLimit: Int
     var hideUndatedFromTodayPreview: Bool
@@ -31,6 +35,10 @@ struct BackupPreferences: Codable {
 
     init(defaults: UserDefaults) {
         func value<T>(_ key: String, _ fallback: T) -> T { defaults.object(forKey: key) as? T ?? fallback }
+        todayHideOlderCompletedSubtasks = value("todayHideOlderCompletedSubtasks", false)
+        todayHideOldOverdue = value("todayHideOldOverdue", false)
+        todayOverdueDays = value("todayOverdueDays", 30)
+        todayBeforeOverdue = value("todayBeforeOverdue", false)
         newTasksDueToday = value("newTasksDueToday", false)
         todayPreviewLimit = value("todayPreviewLimit", 5)
         urgentPreviewLimit = value("urgentPreviewLimit", 5)
@@ -52,7 +60,7 @@ struct BackupPreferences: Codable {
     }
 
     func validate() throws {
-        guard (-1...5).contains(todayPreviewLimit), (-1...5).contains(urgentPreviewLimit),
+        guard (1...3650).contains(todayOverdueDays ?? 30), (-1...5).contains(todayPreviewLimit), (-1...5).contains(urgentPreviewLimit),
               CleanupInterval(rawValue: completedCleanupInterval) != nil,
               TrashRetention(rawValue: trashRetention) != nil,
               ListBadgeContent(rawValue: listBadgeContent) != nil,
@@ -69,6 +77,10 @@ struct BackupPreferences: Codable {
         // Only app-owned settings are imported, never arbitrary UserDefaults keys.
         let values: [String: Any?] = [
             "newTasksDueToday": newTasksDueToday ?? false,
+            "todayHideOlderCompletedSubtasks": todayHideOlderCompletedSubtasks ?? false,
+            "todayHideOldOverdue": todayHideOldOverdue ?? false,
+            "todayOverdueDays": todayOverdueDays ?? 30,
+            "todayBeforeOverdue": todayBeforeOverdue ?? false,
             "todayPreviewLimit": todayPreviewLimit, "urgentPreviewLimit": urgentPreviewLimit,
             "hideUndatedFromTodayPreview": hideUndatedFromTodayPreview,
             "sortScheduledByDate": sortScheduledByDate, "sortCompletedByDate": sortCompletedByDate,
