@@ -97,18 +97,7 @@ struct TaskEditor: View {
                     ForEach(RepeatRule.allCases, id: \.self) { Text($0.rawValue) }
                 }
                 if rule == .custom {
-                    ForEach(1...7, id: \.self) { day in
-                        Toggle(Calendar.current.weekdaySymbols[day - 1], isOn: Binding(
-                            get: { selectedWeekdays.contains(day) },
-                            set: { selected in
-                                if selected { selectedWeekdays.insert(day) }
-                                else { selectedWeekdays.remove(day) }
-                            }
-                        ))
-                    }
-                    if selectedWeekdays.isEmpty {
-                        Text("Select at least one day.").font(.footnote).foregroundStyle(.secondary)
-                    }
+                    CustomRepeatPicker(selection: $selectedWeekdays)
                 }
             }
             Section {
