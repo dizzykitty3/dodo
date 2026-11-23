@@ -6,6 +6,12 @@ struct ListsSettingsView: View {
     @Binding var sortCompleted: Bool
     @Environment(\.modelContext) private var context
     @Query(sort: TaskListRecord.displayOrder) private var lists: [TaskListRecord]
+    @Query private var tasks: [TaskRecord]
+    @State private var confirmingCleanup = false
+    @State private var cleaned = false
+    private var emptyItems: EmptyListCleanup.Candidates {
+        EmptyListCleanup.candidates(lists: lists, tasks: tasks)
+    }
     @State private var selection: TaskListRecord?
     @State private var editingList: TaskListRecord?
     @State private var creatingList = false
@@ -64,6 +70,14 @@ struct ListsSettingsView: View {
                     Text("Tap a list to edit. Drag to reorder or swipe to delete.")
                 }
             }
+            Section {
+                Button("Delete Empty Lists and Tags", role: .destructive) { confirmingCleanup = true }
+                    .disabled(emptyItems.isEmpty)
+            } header: {
+                Text("Cleanup")
+            } footer: {
+                Text("Permanently deletes lists and tags with no tasks. Completed and recently deleted tasks count as tasks.")
+            }
         }
         .navigationTitle("Lists")
         .navigationBarTitleDisplayMode(.inline)
@@ -75,6 +89,23 @@ struct ListsSettingsView: View {
         .sheet(item: $editingList) { list in
             NavigationStack { CustomListEditor(list: list) }
                 .confirmSheetDismissal()
+        }
+        .alert("Delete Empty Lists and Tags?", isPresented: $confirmingCleanup) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                do {
+                    try EmptyListCleanup.delete(in: context)
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    cleaned = true
+                } catch { self.error = error.localizedDescription }
+            }
+        } message: {
+            Text("This permanently deletes \(emptyItems.lists.count) empty lists and \(emptyItems.tagCount) empty tags. Tasks are kept. This cannot be undone.")
+        }
+        .alert("Cleanup Complete", isPresented: $cleaned) {
+            Button("OK") {}
+        } message: {
+            Text("Empty lists and tags have been deleted.")
         }
         .alert("Delete List?", isPresented: $deleting) {
             Button("Cancel", role: .cancel) {}
