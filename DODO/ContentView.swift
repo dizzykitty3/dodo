@@ -111,7 +111,9 @@ struct ContentView: View {
     @State private var toastID: UUID?
     @State private var query = ""
     @State private var path = NavigationPath()
-    @State private var sheetPath = NavigationPath()
+    @State private var editingTask: TaskRecord?
+    @State private var searchEditingTask: TaskRecord?
+    @State private var editSessionID = UUID()
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -144,9 +146,6 @@ struct ContentView: View {
                         .labelStyle(.iconOnly)
                 }
                 composeToolbar(from: nil)
-            }
-            .navigationDestination(for: TaskRecord.self) { record in
-                TaskEditor(task: record, onDelete: { showToast("Task deleted") })
             }
             .navigationDestination(for: TaskList.self) { list in
                 taskRows(in: list)
@@ -200,8 +199,11 @@ struct ContentView: View {
             do { try await Task.sleep(for: .seconds(1.5)) } catch { return }
             toastID = nil
         }
+        .sheet(item: $editingTask) { record in
+            taskEditorSheet(record)
+        }
         .sheet(item: $panel, onDismiss: finishCompose) { selected in
-            NavigationStack(path: $sheetPath) {
+            NavigationStack {
                 Group {
                     switch selected {
                     case .search(let source):
@@ -229,8 +231,8 @@ struct ContentView: View {
                                    presetList: composeSource?.list, presetTagID: tagID, onCreate: { didCreateTask = true })
                     }
                 }
-                .navigationDestination(for: TaskRecord.self) { record in
-                    TaskEditor(task: record, onDelete: { showToast("Task deleted") })
+                .sheet(item: $searchEditingTask) { record in
+                    taskEditorSheet(record)
                 }
             }
             .id(panelSessionID)
@@ -238,6 +240,15 @@ struct ContentView: View {
             .confirmSheetDismissal()
             .presentationDetents([.large])
         }
+    }
+
+    private func taskEditorSheet(_ record: TaskRecord) -> some View {
+        NavigationStack {
+            TaskEditor(task: record, onDelete: { showToast("Task deleted") })
+        }
+        .id(editSessionID)
+        .confirmSheetDismissal()
+        .presentationDetents([.large])
     }
 
     private func present(_ selection: Panel) {
@@ -253,7 +264,7 @@ struct ContentView: View {
     }
 
     private func finishCompose() {
-        sheetPath = NavigationPath()
+        searchEditingTask = nil
         if didCreateTask {
             didCreateTask = false
             showToast("Task saved")
@@ -454,8 +465,9 @@ struct ContentView: View {
                 }
             } else {
                 CompletionRow(record: record, onEdit: {
-                    if panel?.isSearch == true { sheetPath.append(record) }
-                    else { path.append(record) }
+                    editSessionID = UUID()
+                    if panel?.isSearch == true { searchEditingTask = record }
+                    else { editingTask = record }
                 },
                               toggle: showsCheckbox ? { child in try toggleCompletion(record, child: child) } : nil)
             }

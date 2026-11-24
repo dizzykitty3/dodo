@@ -146,7 +146,7 @@ struct TaskEditor: View {
         .scrollDismissesKeyboard(.interactively)
         .onChange(of: list) { tagID = nil }
         .navigationTitle(task == nil ? "New Task" : "Edit Task")
-        .confirmUnsavedChanges(hasChanges, pushed: task != nil, closeTitle: "Close")
+        .confirmUnsavedChanges(hasChanges, closeTitle: "Close")
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") { save() }

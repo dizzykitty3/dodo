@@ -89,6 +89,7 @@ struct ListsSettingsView: View {
         .sheet(item: $editingList) { list in
             NavigationStack { CustomListEditor(list: list) }
                 .confirmSheetDismissal()
+                .presentationDetents([.large])
         }
         .alert("Delete Empty Lists and Tags?", isPresented: $confirmingCleanup) {
             Button("Cancel", role: .cancel) {}
