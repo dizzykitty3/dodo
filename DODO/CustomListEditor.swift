@@ -55,7 +55,7 @@ struct CustomListEditor: View {
     @Query(sort: TaskListRecord.displayOrder) private var lists: [TaskListRecord]
     let list: TaskListRecord?
     @FocusState private var nameFocused: Bool
-    @State private var titleFrame = CGRect.zero
+    @State private var detailsExpanded: Bool
     @State private var name: String
     @State private var color: ListCardColor
     @State private var icon: ListCardIcon
@@ -72,6 +72,7 @@ struct CustomListEditor: View {
     init(list: TaskListRecord? = nil, onDelete: @escaping () -> Void = {}) {
         self.onDelete = onDelete
         self.list = list
+        _detailsExpanded = State(initialValue: list != nil)
         _tags = State(initialValue: list?.tags ?? [])
         _originalTagIDs = State(initialValue: Set(list?.tags.map(\.id) ?? []))
         _name = State(initialValue: list?.name ?? "")
@@ -97,20 +98,21 @@ struct CustomListEditor: View {
 
     var body: some View {
         Form {
-            Section {
-                Label(trimmedName.isEmpty ? "New List" : trimmedName, systemImage: icon.rawValue)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .background(color.color.gradient, in: RoundedRectangle(cornerRadius: 20))
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
+            if detailsExpanded {
+                Section {
+                    Label(trimmedName.isEmpty ? "New List" : trimmedName, systemImage: icon.rawValue)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                        .background(color.color.gradient, in: RoundedRectangle(cornerRadius: 20))
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                }
             }
             Section {
                 TextField("List name", text: $name)
                     .focused($nameFocused)
-                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("listForm")) } action: { titleFrame = $0 }
                     .submitLabel(.done)
                     .onSubmit { save() }
             } header: {
@@ -118,79 +120,88 @@ struct CustomListEditor: View {
             } footer: {
                 if duplicateName { Text("A list with this name already exists.") }
             }
-            Section("Card Color") {
-                LazyVGrid(columns: columns) {
-                    ForEach(ListCardColor.allCases, id: \.self) { option in
-                        Button { color = option } label: {
-                            Circle().fill(option.color)
-                                .frame(width: 32, height: 32)
-                                .overlay {
-                                    if color == option { Image(systemName: "checkmark").foregroundStyle(.white) }
-                                }
-                                .frame(width: 44, height: 44)
-                        }
-                        .buttonStyle(.plain)
-                        .glassEffect(.regular.interactive(), in: .circle)
-                        .accessibilityLabel(option.rawValue)
-                        .accessibilityAddTraits(color == option ? .isSelected : [])
-                    }
+            if !detailsExpanded {
+                Button("Show More") {
+                    nameFocused = false
+                    detailsExpanded = true
                 }
+                .tint(.blue)
             }
-            Section("Icon") {
-                LazyVGrid(columns: columns) {
-                    ForEach(ListCardIcon.allCases, id: \.self) { option in
-                        Button { icon = option } label: {
-                            Image(systemName: option.rawValue)
-                                .frame(width: 44, height: 44)
-                                .foregroundStyle(icon == option ? Color.white : Color.primary)
-                        }
-                        .buttonStyle(.plain)
-                        .glassEffect(.regular.tint(icon == option ? color.color : nil).interactive(), in: .circle)
-                        .accessibilityLabel(String(describing: option).capitalized)
-                        .accessibilityAddTraits(icon == option ? .isSelected : [])
-                    }
-                }
-            }
-            Section {
-                ForEach(tags) { tag in
-                    Button(tag.name) { editingTag = tag }.foregroundStyle(.primary)
-                }
-                    .onMove { tags.move(fromOffsets: $0, toOffset: $1) }
-                    .onDelete { tags.remove(atOffsets: $0) }
-                Button("New Tag") {
-                    tagSessionID = UUID()
-                    addingTag = true
-                }.tint(.blue)
-            } header: {
-                Text("Tags")
-            } footer: {
-                if !tags.isEmpty { Text("Drag to reorder or swipe to delete. Tasks in a deleted tag stay in this list.") }
-            }
-            if let list {
-                Section {
-                    Button("Delete List", role: .destructive) { confirmingDelete = true }
-                        .confirmationDialog("Delete this list?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-                            Button("Delete List", role: .destructive) {
-                                do {
-                                    try list.deleteKeepingTasks(in: context)
-                                    try context.save()
-                                    dismiss()
-                                    onDelete()
-                                } catch {
-                                    context.rollback()
-                                    self.error = error.localizedDescription
-                                }
+            if detailsExpanded {
+                Section("Card Color") {
+                    LazyVGrid(columns: columns) {
+                        ForEach(ListCardColor.allCases, id: \.self) { option in
+                            Button { nameFocused = false; color = option } label: {
+                                Circle().fill(option.color)
+                                    .frame(width: 32, height: 32)
+                                    .overlay {
+                                        if color == option { Image(systemName: "checkmark").foregroundStyle(.white) }
+                                    }
+                                    .frame(width: 44, height: 44)
                             }
-                        } message: {
-                            Text("Deleting this list keeps its tasks.")
+                            .buttonStyle(.plain)
+                            .glassEffect(.regular.interactive(), in: .circle)
+                            .accessibilityLabel(option.rawValue)
+                            .accessibilityAddTraits(color == option ? .isSelected : [])
                         }
+                    }
+                }
+                Section("Icon") {
+                    LazyVGrid(columns: columns) {
+                        ForEach(ListCardIcon.allCases, id: \.self) { option in
+                            Button { nameFocused = false; icon = option } label: {
+                                Image(systemName: option.rawValue)
+                                    .frame(width: 44, height: 44)
+                                    .foregroundStyle(icon == option ? Color.white : Color.primary)
+                            }
+                            .buttonStyle(.plain)
+                            .glassEffect(.regular.tint(icon == option ? color.color : nil).interactive(), in: .circle)
+                            .accessibilityLabel(String(describing: option).capitalized)
+                            .accessibilityAddTraits(icon == option ? .isSelected : [])
+                        }
+                    }
+                }
+                Section {
+                    ForEach(tags) { tag in
+                        Button(tag.name) { nameFocused = false; editingTag = tag }.foregroundStyle(.primary)
+                    }
+                        .onMove { nameFocused = false; tags.move(fromOffsets: $0, toOffset: $1) }
+                        .onDelete { nameFocused = false; tags.remove(atOffsets: $0) }
+                    Button("New Tag") {
+                        nameFocused = false
+                        tagSessionID = UUID()
+                        addingTag = true
+                    }.tint(.blue)
+                } header: {
+                    Text("Tags")
+                } footer: {
+                    if !tags.isEmpty { Text("Drag to reorder or swipe to delete. Tasks in a deleted tag stay in this list.") }
+                }
+                if let list {
+                    Section {
+                        Button("Delete List", role: .destructive) {
+                            nameFocused = false
+                            confirmingDelete = true
+                        }
+                            .confirmationDialog("Delete this list?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                                Button("Delete List", role: .destructive) {
+                                    do {
+                                        try list.deleteKeepingTasks(in: context)
+                                        try context.save()
+                                        dismiss()
+                                        onDelete()
+                                    } catch {
+                                        context.rollback()
+                                        self.error = error.localizedDescription
+                                    }
+                                }
+                            } message: {
+                                Text("Deleting this list keeps its tasks.")
+                            }
+                    }
                 }
             }
         }
-        .coordinateSpace(name: "listForm")
-        .simultaneousGesture(SpatialTapGesture(coordinateSpace: .named("listForm")).onEnded { event in
-            if !titleFrame.contains(event.location) { nameFocused = false }
-        })
         .scrollDismissesKeyboard(.interactively)
         .onAppear { if list == nil { nameFocused = true } }
         .navigationTitle(list == nil ? "New List" : "Edit List")

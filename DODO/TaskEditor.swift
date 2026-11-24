@@ -18,9 +18,9 @@ struct TaskEditor: View {
     let onCreate: () -> Void
 
     @State private var linkText: String
+    @State private var detailsExpanded: Bool
     @State private var titleFocusRequest = 0
     @State private var titleBlurRequest = 0
-    @State private var titleFrame = CGRect.zero
     @State private var title: String
     @State private var hasDate: Bool
     @State private var date: Date
@@ -44,6 +44,7 @@ struct TaskEditor: View {
         self.onDelete = onDelete
         self.onCreate = onCreate
         self.task = task
+        _detailsExpanded = State(initialValue: task != nil)
         let date = task?.dueDay.flatMap { try? TaskRecord.dayFormat.parseStrategy.parse($0) } ?? .now
         let rule = RepeatRule(rawValue: task?.repeatRule ?? "") ?? .never
         _linkText = State(initialValue: task?.link?.absoluteString ?? "")
@@ -64,87 +65,103 @@ struct TaskEditor: View {
         Form {
             Section("Task") {
                 TaskTitleInput(text: $title, focusOnAppearance: task == nil, blurRequest: titleBlurRequest, focusRequest: titleFocusRequest, submit: save)
-                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("taskForm")) } action: { titleFrame = $0 }
                     .contentShape(Rectangle())
                     .simultaneousGesture(TapGesture().onEnded { titleFocusRequest += 1 })
                     .overlay(alignment: .topLeading) {
                         if title.isEmpty { Text("Title").foregroundStyle(.tertiary).allowsHitTesting(false).accessibilityHidden(true) }
                     }
-                TextField("Link", text: $linkText, prompt: Text("Website link (optional)"))
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                if invalidLink {
-                    Text("Enter a web address, such as https://example.com.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                if !lists.isEmpty {
-                    Picker("List", selection: $list) {
-                        Text("None").tag(nil as TaskListRecord?)
-                        ForEach(lists) { Text($0.name).tag(Optional($0)) }
+                if detailsExpanded {
+                    TextField("Link", text: $linkText, prompt: Text("Website link (optional)"))
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    if invalidLink {
+                        Text("Enter a web address, such as https://example.com.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
-                }
-                if let list {
-                    Picker("Tag", selection: $tagID) {
-                        Text("None").tag(nil as UUID?)
-                        ForEach(list.tags) { Text($0.name).tag(Optional($0.id)) }
-                    }
-                }
-                Toggle("Urgent", isOn: $urgent)
-            }
-            Section("Schedule") {
-                Toggle("Set date", isOn: $hasDate)
-                if hasDate { DatePicker("Date", selection: $date, displayedComponents: .date) }
-                Picker("Repeat", selection: $rule) {
-                    ForEach(RepeatRule.allCases, id: \.self) { Text($0.rawValue) }
-                }
-                if rule == .custom {
-                    CustomRepeatPicker(selection: $selectedWeekdays)
-                }
-            }
-            Section {
-                ForEach($subtasks) { $subtask in
-                    HStack {
-                        Button {
-                            subtask.isComplete.toggle()
-                        } label: {
-                            Image(systemName: subtask.isComplete ? "checkmark.circle.fill" : "circle")
+                    if !lists.isEmpty {
+                        Picker("List", selection: $list) {
+                            Text("None").tag(nil as TaskListRecord?)
+                            ForEach(lists) { Text($0.name).tag(Optional($0)) }
                         }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel(subtask.isComplete ? "Mark incomplete" : "Mark complete")
-                        TextField("Subtask title", text: $subtask.title)
-                            .focused($focusedField, equals: .subtask(subtask.id))
-                            .submitLabel(.next)
-                            .onSubmit {
-                                guard !subtask.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                                      let index = subtasks.firstIndex(where: { $0.id == subtask.id }) else { return }
-                                insertSubtask(at: index + 1)
-                            }
                     }
+                    if let list {
+                        Picker("Tag", selection: $tagID) {
+                            Text("None").tag(nil as UUID?)
+                            ForEach(list.tags) { Text($0.name).tag(Optional($0.id)) }
+                        }
+                    }
+                    Toggle("Urgent", isOn: $urgent)
                 }
-                .onMove { subtasks.move(fromOffsets: $0, toOffset: $1) }
-                .onDelete { subtasks.remove(atOffsets: $0) }
-                Button("Add subtask") {
-                    insertSubtask(at: subtasks.endIndex)
+            }
+            if !detailsExpanded {
+                Button("Show More") {
+                    titleBlurRequest += 1
+                    detailsExpanded = true
                 }
                 .tint(.blue)
-            } header: {
-                Text("Subtasks")
-            } footer: {
-                Text("Drag to reorder or swipe to delete. Completing all subtasks automatically completes the parent task.")
             }
-            if task != nil {
-                Button("Delete task", role: .destructive) { confirmingDelete = true }
-                    .foregroundStyle(.red)
+            if detailsExpanded {
+                Section("Schedule") {
+                    Toggle("Set date", isOn: $hasDate)
+                    if hasDate { DatePicker("Date", selection: $date, displayedComponents: .date) }
+                    Picker("Repeat", selection: $rule) {
+                        ForEach(RepeatRule.allCases, id: \.self) { Text($0.rawValue) }
+                    }
+                    if rule == .custom {
+                        CustomRepeatPicker(selection: $selectedWeekdays)
+                    }
+                }
+                Section {
+                    ForEach($subtasks) { $subtask in
+                        HStack {
+                            Button {
+                                titleBlurRequest += 1
+                            subtask.isComplete.toggle()
+                            } label: {
+                                Image(systemName: subtask.isComplete ? "checkmark.circle.fill" : "circle")
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel(subtask.isComplete ? "Mark incomplete" : "Mark complete")
+                            TextField("Subtask title", text: $subtask.title)
+                                .focused($focusedField, equals: .subtask(subtask.id))
+                                .submitLabel(.next)
+                                .onSubmit {
+                                    guard !subtask.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                                          let index = subtasks.firstIndex(where: { $0.id == subtask.id }) else { return }
+                                    insertSubtask(at: index + 1)
+                                }
+                        }
+                    }
+                    .onMove { subtasks.move(fromOffsets: $0, toOffset: $1) }
+                    .onDelete { subtasks.remove(atOffsets: $0) }
+                    Button("Add subtask") {
+                        insertSubtask(at: subtasks.endIndex)
+                    }
+                    .tint(.blue)
+                } header: {
+                    Text("Subtasks")
+                } footer: {
+                    Text("Drag to reorder or swipe to delete. Completing all subtasks automatically completes the parent task.")
+                }
+                if task != nil {
+                    Button("Delete task", role: .destructive) {
+                        titleBlurRequest += 1
+                        confirmingDelete = true
+                    }
+                        .foregroundStyle(.red)
+                }
             }
         }
-        .coordinateSpace(name: "taskForm")
-        .simultaneousGesture(SpatialTapGesture(coordinateSpace: .named("taskForm")).onEnded { event in
-            if !titleFrame.contains(event.location) { titleBlurRequest += 1 }
-        })
         .scrollDismissesKeyboard(.interactively)
-        .onChange(of: list) { tagID = nil }
+        .onChange(of: list) { titleBlurRequest += 1; tagID = nil }
+        .onChange(of: tagID) { titleBlurRequest += 1 }
+        .onChange(of: urgent) { titleBlurRequest += 1 }
+        .onChange(of: hasDate) { titleBlurRequest += 1 }
+        .onChange(of: date) { titleBlurRequest += 1 }
+        .onChange(of: rule) { titleBlurRequest += 1 }
+        .onChange(of: selectedWeekdays) { titleBlurRequest += 1 }
         .navigationTitle(task == nil ? "New Task" : "Edit Task")
         .confirmUnsavedChanges(hasChanges, closeTitle: "Close")
         .toolbar {
@@ -177,6 +194,7 @@ struct TaskEditor: View {
     }
 
     private func insertSubtask(at index: Int) {
+        titleBlurRequest += 1
         let next = Subtask()
         subtasks.insert(next, at: index)
         focusedField = .subtask(next.id)
