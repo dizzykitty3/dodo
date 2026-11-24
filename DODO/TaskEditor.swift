@@ -158,7 +158,11 @@ struct TaskEditor: View {
         .onChange(of: list) { titleBlurRequest += 1; tagID = nil }
         .onChange(of: tagID) { titleBlurRequest += 1 }
         .onChange(of: urgent) { titleBlurRequest += 1 }
-        .onChange(of: hasDate) { titleBlurRequest += 1 }
+        .onChange(of: hasDate) {
+            titleBlurRequest += 1
+            // Discard the previous selection and use today when dates are enabled again.
+            date = .now
+        }
         .onChange(of: date) { titleBlurRequest += 1 }
         .onChange(of: rule) { titleBlurRequest += 1 }
         .onChange(of: selectedWeekdays) { titleBlurRequest += 1 }
