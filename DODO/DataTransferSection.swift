@@ -60,12 +60,15 @@ struct DataTransferSection: View {
     @State private var busy = false
     @State private var errorMessage: String?
     @State private var successMessage: String?
+    @State private var imported = false
+    @State private var showingSnapshots = false
 
     var body: some View {
         Section {
             Button("Export Data") { export() }.tint(.blue)
             Button("Import & Merge Data") { beginImport(.merge) }.tint(.blue)
             Button("Import & Replace All") { beginImport(.replace) }.tint(.blue)
+            NavigationLink("Import Snapshots") { ImportSnapshotsView(onRestore: onImport) }
         } header: {
             Text("Export & Import")
         } footer: {
@@ -109,7 +112,7 @@ struct DataTransferSection: View {
             if let pending {
                 let modified = pending.modifiedAt?.formatted(date: .numeric, time: .shortened) ?? "Unknown"
                 let explanation = pending.mode == .replace
-                    ? "All local tasks, lists, tags, and settings will be replaced. This cannot be undone."
+                    ? "All local tasks, lists, tags, and settings will be replaced. A snapshot will be saved first so you can restore the previous state."
                     : "Imported tasks will be added, including duplicates. Matching lists and tags will be reused. Existing data and settings will be kept."
                 Text("\(pending.filename)\nModified: \(modified)\nTasks: \(pending.backup.tasks.count.formatted()) (including Recently Deleted)\n\n\(explanation)")
             }
@@ -117,12 +120,27 @@ struct DataTransferSection: View {
         .alert("Couldn’t Transfer Data", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") {}
         } message: { Text(errorMessage ?? "") }
+        .sheet(isPresented: $showingSnapshots) {
+            NavigationStack {
+                ImportSnapshotsView(onRestore: onImport)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Close", systemImage: "xmark") { showingSnapshots = false }
+                        }
+                    }
+            }
+            .presentationDetents([.large])
+        }
         .alert("Done", isPresented: Binding(get: { successMessage != nil }, set: { if !$0 { successMessage = nil } })) {
+            if imported {
+                Button("View Snapshots") { showingSnapshots = true }
+            }
             Button("OK") {}
         } message: { Text(successMessage ?? "") }
     }
 
     private func export() {
+        imported = false
         do {
             document = BackupDocument(data: try BackupStore.snapshot(context: context).encoded())
             exporting = true
@@ -140,10 +158,11 @@ struct DataTransferSection: View {
         busy = true
         defer { busy = false; self.pending = nil }
         do {
-            try BackupStore.apply(pending.backup, mode: pending.mode, context: context)
+            try ImportSnapshots().importData(pending.backup, mode: pending.mode, context: context)
             onImport()
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            successMessage = "\(pending.backup.tasks.count.formatted()) tasks imported."
+            imported = true
+            successMessage = "\(pending.backup.tasks.count.formatted()) tasks imported. Restore an import snapshot to undo this import."
         } catch { report(error) }
     }
 

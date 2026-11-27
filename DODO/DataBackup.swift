@@ -347,7 +347,7 @@ enum BackupStore {
                     task.tagID = tagMap[listID]?[tagID]
                 }
                 task.subtasks = incoming.subtasks.map {
-                    Subtask(id: mode == .merge ? UUID() : $0.id, title: $0.title, isComplete: $0.isComplete)
+                    Subtask(id: mode == .merge ? UUID() : $0.id, title: $0.title, isComplete: $0.isComplete, completedAt: $0.completedAt)
                 }
                 context.insert(task)
             }
