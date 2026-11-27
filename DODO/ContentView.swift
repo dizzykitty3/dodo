@@ -68,6 +68,7 @@ struct ContentView: View {
     private var listBadge = ListBadgePreferences()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("hideYearProgress") private var hideYearProgress = false
     @AppStorage("completedCleanupInterval") private var cleanupInterval = CleanupInterval.never
     @AppStorage("trashRetention") private var trashRetention = TrashRetention.sevenDays
     @Query private var archives: [CompletionArchive]
@@ -119,6 +120,7 @@ struct ContentView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: 12) {
+                    if !hideYearProgress { YearProgressCard() }
                     card(.urgent)
                     card(.today)
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())], spacing: 12) {

@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Binding var hideUndatedFromTodayPreview: Bool
     @Binding var sortScheduled: Bool
     @Binding var sortCompleted: Bool
+    @AppStorage("hideYearProgress") private var hideYearProgress = false
     @AppStorage("completedCleanupInterval") private var cleanupInterval = CleanupInterval.never
     @AppStorage("trashRetention") private var trashRetention = TrashRetention.sevenDays
     @AppStorage("newTasksDueToday") private var newTasksDueToday = false
@@ -90,6 +91,9 @@ struct SettingsView: View {
 
     private var homeSettings: some View {
         Form {
+            Section("Year Progress") {
+                Toggle("Hide Year Progress", isOn: $hideYearProgress)
+            }
             Section("Urgent Card") { previewLimitPicker($urgentPreviewLimit) }
             Section("Today Card") {
                 previewLimitPicker($previewLimit)
