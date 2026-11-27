@@ -27,11 +27,13 @@ enum ListBadgeSeparator: String, CaseIterable {
 }
 
 struct ListBadgePreferences: DynamicProperty {
+    @AppStorage("showTaskTagBadges") var isVisible = true
     @AppStorage("listBadgeContent") var content = ListBadgeContent.list
     @AppStorage("listBadgeSeparator") var separator = ListBadgeSeparator.space
 
     func title(list: String, tag: String?) -> String? {
-        switch content {
+        guard isVisible else { return nil }
+        return switch content {
         case .list: list
         case .tag: tag
         case .both: tag.map { list + separator.text + $0 } ?? list

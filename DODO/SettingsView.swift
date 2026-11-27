@@ -115,26 +115,32 @@ struct SettingsView: View {
     private var badgeSettings: some View {
         Form {
             Section("List Badges") {
-                Picker("Content", selection: listBadge.$content) {
-                    ForEach(ListBadgeContent.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                if listBadge.content == .both {
-                    Picker("Separator", selection: listBadge.$separator) {
-                        ForEach(ListBadgeSeparator.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                Toggle("Show Tag Badges", isOn: listBadge.$isVisible)
+                if listBadge.isVisible {
+                    Picker("Content", selection: listBadge.$content) {
+                        ForEach(ListBadgeContent.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
+                    if listBadge.content == .both {
+                        Picker("Separator", selection: listBadge.$separator) {
+                            ForEach(ListBadgeSeparator.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }
                     }
                 }
             }
             Section("Date Badges") {
-                Toggle("Use Abbreviated Month Names", isOn: dateBadge.$abbreviatesMonth)
-                if !dateBadge.abbreviatesMonth {
-                    Picker("Date Order", selection: dateBadge.$order) {
-                        ForEach(DateBadgeOrder.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                Toggle("Show Date Badges", isOn: dateBadge.$isVisible)
+                if dateBadge.isVisible {
+                    Toggle("Use Abbreviated Month Names", isOn: dateBadge.$abbreviatesMonth)
+                    if !dateBadge.abbreviatesMonth {
+                        Picker("Date Order", selection: dateBadge.$order) {
+                            ForEach(DateBadgeOrder.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }
+                        Picker("Separator", selection: dateBadge.$separator) {
+                            ForEach(DateBadgeSeparator.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }
                     }
-                    Picker("Separator", selection: dateBadge.$separator) {
-                        ForEach(DateBadgeSeparator.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                    }
+                    Toggle("Show Current Year", isOn: dateBadge.$showsCurrentYear)
                 }
-                Toggle("Show Current Year", isOn: dateBadge.$showsCurrentYear)
             }
             Section("Preview") {
                 ZStack(alignment: .leading) {
@@ -148,7 +154,7 @@ struct SettingsView: View {
     }
 
     private var previewIdentity: String {
-        "\(listBadge.content.rawValue)|\(listBadge.separator.rawValue)|\(dateBadge.order.rawValue)|\(dateBadge.separator.rawValue)|\(dateBadge.abbreviatesMonth)|\(dateBadge.showsCurrentYear)"
+        "\(listBadge.isVisible)|\(dateBadge.isVisible)|\(listBadge.content.rawValue)|\(listBadge.separator.rawValue)|\(dateBadge.order.rawValue)|\(dateBadge.separator.rawValue)|\(dateBadge.abbreviatesMonth)|\(dateBadge.showsCurrentYear)"
     }
 
     private var badgePreview: some View {
@@ -159,11 +165,11 @@ struct SettingsView: View {
                     ViewThatFits(in: .horizontal) {
                         HStack {
                             Text("Plan the next project")
-                            TaskDateBadge(day: "\(year)-11-04")
+                            if dateBadge.isVisible { TaskDateBadge(day: "\(year)-11-04") }
                         }
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Plan the next project")
-                            TaskDateBadge(day: "\(year)-11-04")
+                            if dateBadge.isVisible { TaskDateBadge(day: "\(year)-11-04") }
                         }
                     }
                     if let title = listBadge.title(list: "Work", tag: "Planning") {

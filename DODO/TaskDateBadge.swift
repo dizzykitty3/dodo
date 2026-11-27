@@ -11,6 +11,7 @@ enum DateBadgeSeparator: String, CaseIterable {
 }
 
 struct DateBadgePreferences: DynamicProperty {
+    @AppStorage("showTaskDateBadges") var isVisible = true
     static func initializeFromSystem() {
         let defaults = UserDefaults.standard
         guard !defaults.bool(forKey: "dateBadgeInitialized") else { return }

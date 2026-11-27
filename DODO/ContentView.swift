@@ -727,6 +727,7 @@ private struct TaskLinkButton: View {
 }
 
 private struct TaskBadges: View {
+    private var dateBadge = DateBadgePreferences()
     let record: TaskRecord
     var body: some View {
         HStack(spacing: 5) {
@@ -738,7 +739,7 @@ private struct TaskBadges: View {
             if record.repeatRule != RepeatRule.never.rawValue {
                 Image(systemName: "repeat").accessibilityLabel("Repeating")
             }
-            if let day = record.dueDay {
+            if dateBadge.isVisible, let day = record.dueDay {
                 TaskDateBadge(day: day)
             }
         }

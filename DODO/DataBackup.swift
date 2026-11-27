@@ -10,6 +10,8 @@ enum BackupError: LocalizedError {
 
 struct BackupPreferences: Codable {
     // Older v1 backups omit this preference; replacement restores the default of false.
+    var showTaskTagBadges: Bool?
+    var showTaskDateBadges: Bool?
     var newTasksDueToday: Bool?
     var todayHideOlderCompletedSubtasks: Bool?
     var todayHideOldOverdue: Bool?
@@ -39,6 +41,8 @@ struct BackupPreferences: Codable {
         todayHideOldOverdue = value("todayHideOldOverdue", false)
         todayOverdueDays = value("todayOverdueDays", 30)
         todayBeforeOverdue = value("todayBeforeOverdue", false)
+        showTaskTagBadges = value("showTaskTagBadges", true)
+        showTaskDateBadges = value("showTaskDateBadges", true)
         newTasksDueToday = value("newTasksDueToday", false)
         todayPreviewLimit = value("todayPreviewLimit", 5)
         urgentPreviewLimit = value("urgentPreviewLimit", 5)
@@ -76,6 +80,8 @@ struct BackupPreferences: Codable {
     func apply(to defaults: UserDefaults) {
         // Only app-owned settings are imported, never arbitrary UserDefaults keys.
         let values: [String: Any?] = [
+            "showTaskTagBadges": showTaskTagBadges ?? true,
+            "showTaskDateBadges": showTaskDateBadges ?? true,
             "newTasksDueToday": newTasksDueToday ?? false,
             "todayHideOlderCompletedSubtasks": todayHideOlderCompletedSubtasks ?? false,
             "todayHideOldOverdue": todayHideOldOverdue ?? false,
