@@ -49,21 +49,26 @@ struct DataTransferSection: View {
     @State private var successMessage: String?
     @State private var imported = false
     @State private var showingSnapshots = false
+    @State private var hasSnapshots = false
 
     var body: some View {
         Section {
             Button("Export Data") { export() }.tint(.blue)
             Button("Import & Merge Data") { beginImport(.merge) }.tint(.blue)
             Button("Import & Replace All") { beginImport(.replace) }.tint(.blue)
-            NavigationLink("Import Snapshots") { ImportSnapshotsView(onRestore: onImport) }
+            if hasSnapshots {
+                NavigationLink("Import Snapshots") { ImportSnapshotsView(onRestore: onImport) }
+                    .onAppear { refreshSnapshots() }
+            }
         } header: {
             Text("Export & Import")
         } footer: {
             if busy { Text("Importing data…") }
             else {
-                Text("Export backs up all data and settings. Merge adds imported data and keeps your settings. Replace All replaces all local data and settings. Selecting a file starts the import automatically after saving a snapshot.")
+                Text("Export backs up all data and settings. Merge adds imported data and keeps your settings. Replace All replaces all local data and settings.")
             }
         }
+        .onAppear { refreshSnapshots() }
         .disabled(busy)
         .fileExporter(isPresented: $exporting, document: document, contentType: .json,
                       defaultFilename: "DODO-\(Date.now.formatted(TaskRecord.dayFormat))") { result in
@@ -89,7 +94,7 @@ struct DataTransferSection: View {
         .alert("Couldn’t Transfer Data", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") {}
         } message: { Text(errorMessage ?? "") }
-        .sheet(isPresented: $showingSnapshots) {
+        .sheet(isPresented: $showingSnapshots, onDismiss: refreshSnapshots) {
             NavigationStack {
                 ImportSnapshotsView(onRestore: onImport)
                     .toolbar {
@@ -101,7 +106,7 @@ struct DataTransferSection: View {
             .presentationDetents([.large])
         }
         .alert("Done", isPresented: Binding(get: { successMessage != nil }, set: { if !$0 { successMessage = nil } })) {
-            if imported {
+            if imported && hasSnapshots {
                 Button("View Snapshots") { showingSnapshots = true }
             }
             Button("OK") {}
@@ -122,11 +127,17 @@ struct DataTransferSection: View {
     }
 
     private func apply(_ backup: DODOBackup, mode: BackupStore.ImportMode) throws {
+        defer { refreshSnapshots() }
         try ImportSnapshots().importData(backup, mode: mode, context: context)
         onImport()
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         imported = true
         successMessage = "\(backup.tasks.count.formatted()) tasks imported. Restore an import snapshot to undo this import."
+    }
+
+    private func refreshSnapshots() {
+        do { hasSnapshots = try !ImportSnapshots().entries().isEmpty }
+        catch { report(error) }
     }
 
     private func report(_ error: Error) {

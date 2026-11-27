@@ -64,9 +64,7 @@ struct ListsSettingsView: View {
             } header: {
                 Text("Manage Lists")
             } footer: {
-                if lists.isEmpty {
-                    Text("Your custom task lists appear here. Tap New List to create one.")
-                } else {
+                if !lists.isEmpty {
                     Text("Tap a list to edit. Drag to reorder or swipe to delete.")
                 }
             }
@@ -75,8 +73,7 @@ struct ListsSettingsView: View {
                     .disabled(emptyItems.isEmpty)
             } header: {
                 Text("Cleanup")
-            } footer: {
-                Text("Permanently deletes lists and tags with no tasks. Completed and recently deleted tasks count as tasks.")
+
             }
         }
         .navigationTitle("Lists")

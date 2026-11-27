@@ -36,8 +36,7 @@ struct ImportSnapshotsView: View {
                             .buttonStyle(.glass)
                         }
                     }
-                } footer: {
-                    Text("Task counts include Recently Deleted. Restoring replaces all current data and settings. Snapshots are kept until you delete them.")
+
                 }
             }
         }
