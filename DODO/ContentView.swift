@@ -111,7 +111,7 @@ struct ContentView: View {
     @State private var toastMessage = ""
     @State private var toastID: UUID?
     @State private var query = ""
-    @State private var path = NavigationPath()
+    @State private var path: [TaskList] = []
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var mainPage = MainPage.tasks
     @State private var settingsPath = NavigationPath()
@@ -133,8 +133,14 @@ struct ContentView: View {
                             taskRows(in: list)
                                 .navigationTitle(list.title)
                                 .toolbar(.visible, for: .navigationBar)
-                                .toolbar(.hidden, for: .tabBar)
+                                .toolbar(.visible, for: .tabBar)
                                 .toolbar {
+                                    if let customList = list.list {
+                                        ToolbarItem(placement: .topBarTrailing) {
+                                            NewTaskTagButton(list: customList)
+                                        }
+                                        ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                                    }
                                     ToolbarItemGroup(placement: .topBarTrailing) {
                                         if list == .completed || list == .deleted {
                                             BulkTaskActions(permanently: list == .deleted) { message in
@@ -142,16 +148,12 @@ struct ContentView: View {
                                                 showToast(message)
                                             }
                                         }
-                                        searchButton(from: list)
                                         if let customList = list.list {
                                             Button("Edit List", systemImage: "pencil") { present(.editList(customList)) }
                                                 .labelStyle(.iconOnly)
                                         }
+                                        searchButton(from: list)
                                     }
-                                    if let customList = list.list {
-                                        ToolbarItem(placement: .bottomBar) { NewTaskTagButton(list: customList) }
-                                    }
-                                    if list.canCreateTask { composeToolbar(from: list) }
                                 }
                         }
                 }
@@ -215,7 +217,7 @@ struct ContentView: View {
                     case .newList:
                         CustomListEditor()
                     case .editList(let list):
-                        CustomListEditor(list: list) { path = NavigationPath() }
+                        CustomListEditor(list: list) { path = [] }
                     case .compose(let composeSource, let tagID):
                         TaskEditor(presetToday: composeSource == .today, presetUrgent: composeSource == .urgent,
                                    presetList: composeSource?.list, presetTagID: tagID, onCreate: { didCreateTask = true })
@@ -244,7 +246,7 @@ struct ContentView: View {
     private var tabSelection: Binding<MainPage> {
         Binding(get: { mainPage }, set: { page in
             if page == .compose {
-                present(.compose(nil))
+                present(.compose(mainPage == .tasks ? path.last : nil))
             } else {
                 mainPage = page
                 UISelectionFeedbackGenerator().selectionChanged()
@@ -282,7 +284,7 @@ struct ContentView: View {
                      sortScheduled: $sortScheduled, sortCompleted: $sortCompleted,
                      completedCount: archives.reduce(0) { $0 + $1.count } + tasks.filter(\.countedCompletion).count,
                      onImport: {
-                         path = NavigationPath()
+                         path = []
                          pendingRemoval = [:]
                      })
     }
@@ -313,17 +315,6 @@ struct ContentView: View {
         if didCreateTask {
             didCreateTask = false
             showToast("Task saved")
-        }
-    }
-
-    @ToolbarContentBuilder
-    private func composeToolbar(from source: TaskList?) -> some ToolbarContent {
-        ToolbarSpacer(.flexible, placement: .bottomBar)
-        ToolbarItem(placement: .bottomBar) {
-            Button("New Task", systemImage: "square.and.pencil") {
-                present(.compose(source))
-            }
-            .labelStyle(.iconOnly)
         }
     }
 
