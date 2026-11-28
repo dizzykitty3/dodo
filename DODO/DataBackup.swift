@@ -58,7 +58,7 @@ struct BackupPreferences: Codable {
         dateBadgeAbbreviatesMonth = value("dateBadgeAbbreviatesMonth", false)
         dateBadgeOrder = value("dateBadgeOrder", DateBadgeOrder.yearFirst.rawValue)
         dateBadgeSeparator = value("dateBadgeSeparator", DateBadgeSeparator.dash.rawValue)
-        dateBadgeShowsCurrentYear = value("dateBadgeShowsCurrentYear", true)
+        dateBadgeShowsCurrentYear = value("dateBadgeShowsCurrentYear", false)
         dateBadgeInitialized = value("dateBadgeInitialized", false)
         dateBadgeInitialPattern = defaults.string(forKey: "dateBadgeInitialPattern")
         dateBadgeInitialOrder = defaults.string(forKey: "dateBadgeInitialOrder")

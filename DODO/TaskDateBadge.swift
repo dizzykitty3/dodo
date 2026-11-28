@@ -37,7 +37,7 @@ struct DateBadgePreferences: DynamicProperty {
     @AppStorage("dateBadgeAbbreviatesMonth") var abbreviatesMonth = false
     @AppStorage("dateBadgeOrder") var order = DateBadgeOrder.yearFirst
     @AppStorage("dateBadgeSeparator") var separator = DateBadgeSeparator.dash
-    @AppStorage("dateBadgeShowsCurrentYear") var showsCurrentYear = true
+    @AppStorage("dateBadgeShowsCurrentYear") var showsCurrentYear = false
 
     func display(_ day: String) -> String {
         let parts = day.split(separator: "-")
