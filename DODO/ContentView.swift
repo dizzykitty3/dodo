@@ -55,7 +55,7 @@ enum TaskList: Hashable, Identifiable {
 }
 
 private enum Panel: Identifiable, Hashable {
-    case search(TaskList), settings, compose(TaskList?, tagID: UUID? = nil), newList, editList(TaskListRecord)
+    case search(TaskList), compose(TaskList?, tagID: UUID? = nil), newList, editList(TaskListRecord)
 
     var isSearch: Bool {
         if case .search = self { return true }
@@ -112,68 +112,66 @@ struct ContentView: View {
     @State private var toastID: UUID?
     @State private var query = ""
     @State private var path = NavigationPath()
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var mainPage = MainPage.tasks
+    @State private var settingsPath = NavigationPath()
     @State private var editingTask: TaskRecord?
     @State private var searchEditingTask: TaskRecord?
     @State private var editSessionID = UUID()
 
     var body: some View {
-        NavigationStack(path: $path) {
-            ScrollView {
-                VStack(spacing: 12) {
-                    if !hideYearProgress { YearProgressCard() }
-                    card(.urgent)
-                    card(.today)
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())], spacing: 12) {
-                        card(.scheduled)
-                        ForEach(lists) { card(.custom($0)) }
-                        newListCard
-                    }
-                    card(.all)
-                    card(.inProgress)
-                    card(.completed)
-                    card(.deleted)
-                }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 20)
-                .frame(maxWidth: 760)
-                .frame(maxWidth: .infinity)
-            }
-            .scrollIndicators(.hidden)
-            .navigationTitle("DODO")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    searchButton(from: .all)
-                    Button("Settings", systemImage: "gearshape") { present(.settings) }
-                        .labelStyle(.iconOnly)
-                }
-                composeToolbar(from: nil)
-            }
-            .navigationDestination(for: TaskList.self) { list in
-                taskRows(in: list)
-                    .navigationTitle(list.title)
-                    .toolbar(.visible, for: .navigationBar)
-                    .toolbar {
-                        ToolbarItemGroup(placement: .topBarTrailing) {
-                            if list == .completed || list == .deleted {
-                                BulkTaskActions(permanently: list == .deleted) { message in
-                                    pendingRemoval = [:]
-                                    showToast(message)
+        TabView(selection: tabSelection) {
+            Tab("Tasks", systemImage: "checklist", value: MainPage.tasks) {
+                NavigationStack(path: $path) {
+                    homePage
+                        .navigationTitle("DODO")
+                        .navigationBarTitleDisplayMode(.large)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) { searchButton(from: .all) }
+                        }
+                        .navigationDestination(for: TaskList.self) { list in
+                            taskRows(in: list)
+                                .navigationTitle(list.title)
+                                .toolbar(.visible, for: .navigationBar)
+                                .toolbar(.hidden, for: .tabBar)
+                                .toolbar {
+                                    ToolbarItemGroup(placement: .topBarTrailing) {
+                                        if list == .completed || list == .deleted {
+                                            BulkTaskActions(permanently: list == .deleted) { message in
+                                                pendingRemoval = [:]
+                                                showToast(message)
+                                            }
+                                        }
+                                        searchButton(from: list)
+                                        if let customList = list.list {
+                                            Button("Edit List", systemImage: "pencil") { present(.editList(customList)) }
+                                                .labelStyle(.iconOnly)
+                                        }
+                                    }
+                                    if let customList = list.list {
+                                        ToolbarItem(placement: .bottomBar) { NewTaskTagButton(list: customList) }
+                                    }
+                                    if list.canCreateTask { composeToolbar(from: list) }
                                 }
-                            }
-                            searchButton(from: list)
-                            if let customList = list.list {
-                                Button("Edit List", systemImage: "pencil") { present(.editList(customList)) }
-                                    .labelStyle(.iconOnly)
-                            }
                         }
-                        if let customList = list.list {
-                            ToolbarItem(placement: .bottomBar) { NewTaskTagButton(list: customList) }
+                }
+                .environment(\.horizontalSizeClass, horizontalSizeClass)
+            }
+            Tab("Settings", systemImage: "gearshape", value: MainPage.settings) {
+                NavigationStack(path: $settingsPath) {
+                    settingsPage
+                        .navigationBarTitleDisplayMode(.large)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) { searchButton(from: .all) }
                         }
-                        if list.canCreateTask { composeToolbar(from: list) }
-                    }
+                }
+                .environment(\.horizontalSizeClass, horizontalSizeClass)
+            }
+            Tab("New Task", systemImage: "square.and.pencil", value: MainPage.compose, role: composeTabRole) {
+                Color.clear
             }
         }
+        .environment(\.horizontalSizeClass, .compact)
         .alert("Couldn’t save changes", isPresented: Binding(get: { storageError != nil }, set: { if !$0 { storageError = nil } })) {
             Button("OK") { storageError = nil }
         } message: { Text(storageError ?? "") }
@@ -218,16 +216,6 @@ struct ContentView: View {
                         CustomListEditor()
                     case .editList(let list):
                         CustomListEditor(list: list) { path = NavigationPath() }
-                    case .settings:
-                        SettingsView(previewLimit: $todayPreviewLimit, urgentPreviewLimit: $urgentPreviewLimit,
-                                     hideUndatedFromTodayPreview: $hideUndatedFromTodayPreview,
-                                     sortScheduled: $sortScheduled, sortCompleted: $sortCompleted,
-                                     completedCount: archives.reduce(0) { $0 + $1.count } + tasks.filter(\.countedCompletion).count,
-                                     onImport: {
-                                         path = NavigationPath()
-                                         pendingRemoval = [:]
-                                     })
-                            .toolbar { sheetCloseButton }
                     case .compose(let composeSource, let tagID):
                         TaskEditor(presetToday: composeSource == .today, presetUrgent: composeSource == .urgent,
                                    presetList: composeSource?.list, presetTagID: tagID, onCreate: { didCreateTask = true })
@@ -242,6 +230,61 @@ struct ContentView: View {
             .confirmSheetDismissal()
             .presentationDetents([.large])
         }
+    }
+
+    private enum MainPage: Hashable {
+        case tasks, settings, compose
+    }
+
+    private var composeTabRole: TabRole {
+        if #available(iOS 27.0, *) { return .prominent }
+        return .search
+    }
+
+    private var tabSelection: Binding<MainPage> {
+        Binding(get: { mainPage }, set: { page in
+            if page == .compose {
+                present(.compose(nil))
+            } else {
+                mainPage = page
+                UISelectionFeedbackGenerator().selectionChanged()
+            }
+        })
+    }
+
+    private var homePage: some View {
+        ScrollView {
+            VStack(spacing: 12) {
+                if !hideYearProgress { YearProgressCard() }
+                card(.urgent)
+                card(.today)
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())], spacing: 12) {
+                    card(.scheduled)
+                    ForEach(lists) { card(.custom($0)) }
+                    newListCard
+                }
+                card(.all)
+                card(.inProgress)
+                card(.completed)
+                card(.deleted)
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 20)
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private var settingsPage: some View {
+        SettingsView(previewLimit: $todayPreviewLimit, urgentPreviewLimit: $urgentPreviewLimit,
+                     hideUndatedFromTodayPreview: $hideUndatedFromTodayPreview,
+                     sortScheduled: $sortScheduled, sortCompleted: $sortCompleted,
+                     completedCount: archives.reduce(0) { $0 + $1.count } + tasks.filter(\.countedCompletion).count,
+                     onImport: {
+                         path = NavigationPath()
+                         pendingRemoval = [:]
+                     })
     }
 
     private func taskEditorSheet(_ record: TaskRecord) -> some View {
